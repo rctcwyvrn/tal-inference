@@ -3,6 +3,8 @@ use syntax::*;
 mod checker;
 mod data;
 mod syntax;
+mod unify;
+mod debug;
 
 fn make_add_program() -> Program {
     // mov r1 1
