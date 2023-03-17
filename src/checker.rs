@@ -1,10 +1,11 @@
 use crate::syntax::*;
 use core::panic;
 use std::{
+    char::MAX,
     collections::{HashMap, HashSet},
     fmt::Display,
     hash::Hash,
-    iter::Map, char::MAX,
+    iter::Map,
 };
 use thiserror::Error;
 
@@ -40,7 +41,7 @@ pub struct Checker {
     // global context
     heap_types: HashMap<Label, Ty>,
     constraints: Vec<(Ty, Ty)>,
-    satisfy: Vec<(Ty, Ty)>,
+    satisfy: Vec<Vec<(Ty, Ty)>>,
 }
 
 #[derive(Debug, Error)]
@@ -58,12 +59,12 @@ pub enum TypeError {
     FailedJump,
 
     #[error("failed to unify")]
-    FailedUnify
+    FailedUnify,
 }
 
 impl Checker {
     fn constrain(&mut self, a: &Ty, b: &Ty) -> bool {
-        println!("> Constraining {:?} == {:?}", a,b);
+        println!("> Constraining {:?} == {:?}", a, b);
         match (a, b) {
             (Ty::Code(_), Ty::Code(_)) | (_, Ty::UnifVar(_)) | (Ty::UnifVar(_), _) => {
                 self.constraints.push((a.clone(), b.clone()));
@@ -73,14 +74,6 @@ impl Checker {
                 return a == b;
             }
         }
-    }
-
-    // Add constraint that either
-    // - a == b
-    // - a is a type variable
-    fn satisfies(&mut self, a: &Ty, b: &Ty) {
-        println!("> Checking satisfies {:?} <: {:?}", a,b);
-        self.satisfy.push((a.clone(), b.clone()))
     }
 
     fn fresh(&mut self) -> Ty {
@@ -122,30 +115,29 @@ impl Checker {
     }
 
     fn constrain_jump(&mut self, val: Value) -> Result<(), TypeError> {
-        // infer val to either a unifVar or a LabelType directly
-        // add \gamma <: val's type to the constraints for later
-
-        // Two cases:
-        // - v is a label and we can directly determine its corresponding Code type
-        // - v is a register containing a type variable t
-
-        // example case: a set_stuff_and_jump_if_two(r1 = v, r2 = label) function that sets some registers and jumps to label if r1 == 2
-        // how does TAL type this?
-        // - jump_if_two's type is pre-determined in the heap type, so it would be Code<r1: Int, r2: Code<Gamma'>> in the subtyping form.
-        //  the subtyping rule would then check that gamma when you reach the jump in jump_if_two is a subtype of Gamma'
-        // - What about for the polymorphic model? It could be Code<r1: Int, r2: Code<Gamma'>>, where gamma has all of its unused registers set as type variables
-        //  tal then just has to check that r2[setting gamma' type vars to match gamma] == gamma 
-
-        // what do we want?
-        // constrain the ty == a code type
-        // check that the current context satisfies new code type (equal up to type variables)
         let val_ty = self.infer_value(val);
         let code_ty = self.init_code_type();
-        let success = self.constrain(&val_ty, &Ty::Code(code_ty.clone()));
 
+        // constrain the value that we're jumping to to be a code type
+        let mut success = self.constrain(&val_ty, &Ty::Code(code_ty.clone()));
+
+        // constrain the parameters of th code type to be supertypes of what our current registers are
+        let mut jump_satisfy = Vec::new();
         for r in 1..=MAX_REGISTER {
-            self.satisfies(&code_ty[&r], &self.register_types[&r].clone());
+            let ty = self.register_types[&r].clone();
+            match ty {
+                // if we have a concrete type, we can constrain the input type of the function we're jumping to
+                Ty::Int => {
+                    // we could say that the parameter type is a type variable
+                    // but that becomes intractable (??), this appears to work
+                    success &= self.constrain(&code_ty[&r], &ty);
+                }
+                // otherwise we have to check that it can be satisfied
+                _ => jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone())),
+            }
         }
+
+        self.satisfy.push(jump_satisfy);
 
         if success {
             Ok(())
@@ -199,7 +191,7 @@ impl Checker {
         }
     }
 
-    fn try_unify(&mut self) -> Result<HashMap<usize, Ty>, TypeError> {
+    fn try_unify(&self) -> Result<HashMap<usize, Ty>, TypeError> {
         let mut mapping = HashMap::new();
         let mut substitute = |v: &mut Vec<(Ty, Ty)>, x, t: Ty| {
             mapping.insert(x, t.clone());
@@ -218,9 +210,7 @@ impl Checker {
             let next = eqs.pop().unwrap();
             match next {
                 (s, t) if s == t => {}
-                (t, Ty::UnifVar(x)) | (Ty::UnifVar(x), t) => {
-                    substitute(&mut eqs, x, t)
-                }
+                (t, Ty::UnifVar(x)) | (Ty::UnifVar(x), t) => substitute(&mut eqs, x, t),
                 (Ty::Code(fn_a), Ty::Code(fn_b)) => {
                     for r in 1..=MAX_REGISTER {
                         eqs.push((fn_a[&r].clone(), fn_b[&r].clone()));
@@ -235,22 +225,64 @@ impl Checker {
         Ok(mapping)
     }
 
-    // fn close(ty: Ty, mapping: &HashMap<usize, Ty>) -> Ty {
-    //     if let Ty::UnifVar(v) = ty {
-    //         if mapping.contains_key(&v) {
-    //             return mapping[&v].clone()
-    //         }
-    //     }
-    //     return ty
-    // }
+    fn try_satisfy_jump(jump: Vec<(Ty, Ty)>) -> Result<HashMap<usize, Ty>, TypeError> {
+        let mut mapping = HashMap::new();
+        let mut substitute = |v: &mut Vec<(Ty, Ty)>, x, t: Ty| {
+            mapping.insert(x, t.clone());
+            v.iter_mut().for_each(|(lhs, rhs)| {
+                if *lhs == Ty::TyVar(x) {
+                    *lhs = t.clone();
+                }
+                if *rhs == Ty::TyVar(x) {
+                    *rhs = t.clone();
+                }
+            });
+        };
 
+        let mut eqs = jump;
+        while !eqs.is_empty() {
+            let next = eqs.pop().unwrap();
+            match next {
+                (s, t) if s == t => {}
+                (t, Ty::TyVar(x)) => substitute(&mut eqs, x, t),
+                (Ty::Code(fn_a), Ty::Code(fn_b)) => {
+                    for r in 1..=MAX_REGISTER {
+                        eqs.push((fn_a[&r].clone(), fn_b[&r].clone()));
+                    }
+                }
+                _ => {
+                    println!("> Failed satisfy_jump on: {:?}", next);
+                    return Err(TypeError::FailedUnify);
+                }
+            }
+        }
+        Ok(mapping)
+    }
     fn try_satisfy(&mut self, mapping: &HashMap<usize, Ty>) -> Result<(), TypeError> {
-        println!("Satisfy");
-        for (lhs, rhs) in &self.satisfy {
-            let lhs = Checker::chase_to_root(lhs.clone(), mapping);
-            let rhs = Checker::chase_to_root(rhs.clone(), mapping);
+        println!("The parameter we're trying to pass it <: what the function is expecting");
+        for jump in &self.satisfy {
+            println!("---");
+            let jump: Vec<(Ty, Ty)> = jump
+                .iter()
+                .map(|(lhs, rhs)| {
+                    (
+                        Checker::chase_to_root(lhs.clone(), mapping),
+                        Checker::chase_to_root(rhs.clone(), mapping),
+                    )
+                })
+                .collect();
+            for (lhs, rhs) in &jump {
+                let lhs = Checker::chase_to_root(lhs.clone(), mapping);
+                let rhs = Checker::chase_to_root(rhs.clone(), mapping);
 
-            println!("{:?} <: {:?}", lhs, rhs);
+                println!("{:?} <: {:?}", lhs, rhs);
+            }
+            let mapping = Checker::try_satisfy_jump(jump.clone())?;
+            print!("[");
+            for (lhs, rhs) in mapping.iter() {
+                print!("TyVar({})={:?}, ", lhs, rhs)
+            }
+            println!("]");
         }
         Ok(())
     }
@@ -275,7 +307,7 @@ impl Checker {
         }
     }
 
-    // returns a non unifVar type, either lifting it to a typevar or finding it within the mapping   
+    // returns a non unifVar type, either lifting it to a typevar or finding it within the mapping
     fn chase_to_root(ty: Ty, mapping: &HashMap<usize, Ty>) -> Ty {
         let mut var = ty;
         loop {
@@ -288,13 +320,15 @@ impl Checker {
                         roots.insert(r, Checker::chase_to_root(f[&r].clone(), mapping));
                     }
                     var = Ty::Code(roots);
-                    break
+                    break;
                 }
-                Ty::UnifVar(v) => if mapping.contains_key(&v) {
-                    var = mapping[&v].clone();
-                } else {
-                    var = Ty::TyVar(v);
-                    break
+                Ty::UnifVar(v) => {
+                    if mapping.contains_key(&v) {
+                        var = mapping[&v].clone();
+                    } else {
+                        var = Ty::TyVar(v);
+                        break;
+                    }
                 }
             }
         }
@@ -313,7 +347,7 @@ impl Checker {
         }
         mapping
     }
-    
+
     fn pretty_heap_w_mapping(&self, mapping: HashMap<usize, Ty>) {
         println!("--- Heap w/ mapping ---");
         for label in self.heap_types.keys() {
@@ -326,7 +360,9 @@ impl Checker {
                         t => println!("  {}: {:?}", r, t),
                     }
                 }
-            } else { panic!("wat") }
+            } else {
+                panic!("wat")
+            }
         }
     }
 
@@ -339,7 +375,7 @@ impl Checker {
         }
 
         self.pretty_heap();
-        
+
         // check each block with the correct context set
         for block in &program {
             // println!("Constraints: {:?}", self.constraints);
@@ -364,12 +400,11 @@ impl Checker {
             }
         }
 
-        // debugging 
+        // debugging
         self.pretty_heap();
         self.pretty_heap_w_mapping(mapping.clone());
 
-
-        // unify the jumps to labelled blocks 
+        // unify the jumps to labelled blocks
         self.try_satisfy(&mapping)?;
 
         Ok(())
