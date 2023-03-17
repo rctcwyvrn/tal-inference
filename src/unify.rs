@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::checker::{*};
+use crate::checker::*;
 
 impl Checker {
     pub fn try_unify(&self) -> Result<HashMap<usize, Ty>, TypeError> {

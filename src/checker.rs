@@ -1,9 +1,6 @@
 use crate::syntax::*;
 use core::panic;
-use std::{
-    collections::{HashMap},
-    fmt::Display,
-};
+use std::{collections::HashMap, fmt::Display};
 use thiserror::Error;
 
 pub const MAX_REGISTER: usize = 3;

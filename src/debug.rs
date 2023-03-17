@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-
-use crate::checker::{*};
-
+use crate::checker::*;
 
 impl Checker {
     pub fn pretty_heap_w_mapping(&self, mapping: HashMap<usize, Ty>) {
