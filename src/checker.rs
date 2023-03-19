@@ -111,6 +111,9 @@ impl Checker {
 
         // constrain the value that we're jumping to to be a code type
         let mut success = self.constrain(&val_ty, &Ty::Code(code_ty.clone()));
+        
+        // note: we could update the register (if val is a register) to be the code type
+        // which would reduce unifications a little, probably doesnt matter
 
         // constrain the parameters of th code type to be supertypes of what our current registers are
         let mut jump_satisfy = Vec::new();
@@ -124,7 +127,10 @@ impl Checker {
                     success &= self.constrain(&code_ty[&r], &ty);
                 }
                 // otherwise we have to check that it can be satisfied
-                _ => jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone())),
+                _ => {
+                    println!("- Adding jump satisfy for r_{} ({:?} <: {:?})", r, self.register_types[&r].clone(), code_ty[&r].clone());
+                    jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
+                }
             }
         }
 

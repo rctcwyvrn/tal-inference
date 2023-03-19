@@ -86,7 +86,6 @@ impl Checker {
     pub fn try_satisfy(&mut self, mapping: &HashMap<usize, Ty>) -> Result<(), TypeError> {
         println!("The parameter we're trying to pass it <: what the function is expecting");
         for jump in &self.satisfy {
-            println!("---");
             let jump: Vec<(Ty, Ty)> = jump
                 .iter()
                 .map(|(lhs, rhs)| {
@@ -96,13 +95,15 @@ impl Checker {
                     )
                 })
                 .collect();
+            
+            // debugging
+            println!("---");
             for (lhs, rhs) in &jump {
-                let lhs = Checker::chase_to_root(lhs.clone(), mapping);
-                let rhs = Checker::chase_to_root(rhs.clone(), mapping);
-
                 println!("{:?} <: {:?}", lhs, rhs);
             }
+            
             let mapping = Checker::try_satisfy_jump(jump.clone())?;
+            // debugging
             print!("[");
             for (lhs, rhs) in mapping.iter() {
                 print!("TyVar({})={:?}, ", lhs, rhs)
