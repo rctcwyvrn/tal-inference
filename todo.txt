@@ -1,0 +1,13 @@
+- make unifier struct, have it handle the state
+- add subtyping checks for ptr types
+  - check that we pass in something larger (? we can solve for the polymorphic rho with the ptr we're passing in?)
+  - i get the feeling that rho types are not very useful for code types, because theres no return value lmao
+    - its useful for our internal checking for load/store, but not for code types
+
+notes
+https://www.ccs.neu.edu/home/wand/papers/wand-lics-87.pdf
+https://caml.inria.fr/pub/papers/garrigue-structural_poly-fool02.pdf 
+
+extra
+- properly split out the inference types and the final types
+- make a system for outputting the gammas and typevar instantiations

@@ -10,9 +10,19 @@ type CodeTy = HashMap<Register, Ty>;
 pub enum Ty {
     Int,
     Code(CodeTy),
-    UnifVar(usize),
+    UnifVar(usize), // really should be in a TyX type but im lazy
     TyVar(usize),
+    
+    // Pointer types
+    Ptr(HashMap<i64, Ty>, Option<Rho>),
+    UniqPtr(HashMap<i64, Ty>, Option<Rho>),
 }
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Rho {
+    Rho(usize)
+}
+
 
 impl Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -21,6 +31,8 @@ impl Display for Ty {
             Ty::Code(free) => write!(f, "(free = {:?})", free),
             Ty::UnifVar(id) => write!(f, "unifvar_{}", *id),
             Ty::TyVar(id) => write!(f, "var_{}", *id),
+            Ty::Ptr(ty, rho) => write!(f, "ptr<{:?} | rho = {:?}>", *ty, rho),
+            Ty::UniqPtr(ty, rho) => write!(f, "uptr<{:?} | rho = {:?}>", *ty, rho),
         }
     }
 }
@@ -28,6 +40,7 @@ impl Display for Ty {
 pub struct Checker {
     // for fresh unifvars
     pub cur_var: usize,
+    pub cur_rho: usize,
 
     // local context
     pub register_types: HashMap<Register, Ty>,
@@ -51,13 +64,23 @@ pub enum TypeError {
 
     #[error("failed to unify")]
     FailedUnify,
+
+    #[error("no rho to row poly over")]
+    NoRho,
+
+    #[error("rho conflict")]
+    RhoConflict,
 }
 
 impl Checker {
     fn constrain(&mut self, a: &Ty, b: &Ty) -> bool {
         println!("> Constraining {:?} == {:?}", a, b);
         match (a, b) {
-            (Ty::Code(_), Ty::Code(_)) | (_, Ty::UnifVar(_)) | (Ty::UnifVar(_), _) => {
+            (Ty::Code(_), Ty::Code(_)) // both code
+            | (_, Ty::UnifVar(_)) | (Ty::UnifVar(_), _) // contains a variable
+            // some combination of pointer types
+            | (Ty::Ptr(_, _), Ty::Ptr(_, _)) | (Ty::UniqPtr(_, _), Ty::Ptr(_, _)) | (Ty::Ptr(_, _), Ty::UniqPtr(_, _)) | (Ty::UniqPtr(_, _), Ty::UniqPtr(_, _))
+             => {
                 self.constraints.push((a.clone(), b.clone()));
                 return true;
             }
@@ -70,6 +93,11 @@ impl Checker {
     fn fresh(&mut self) -> Ty {
         self.cur_var += 1;
         return Ty::UnifVar(self.cur_var);
+    }
+
+    fn fresh_rho(&mut self) -> Rho {
+        self.cur_rho += 1;
+        return Rho::Rho(self.cur_rho);
     }
 
     fn update_register(&mut self, r: Register, ty: Ty) {
@@ -156,12 +184,57 @@ impl Checker {
                 self.constrain_register(r, Ty::Int)?;
                 self.constrain_jump(v)
             }
-            Instruction::Load(_, _, _) => todo!(),
-            Instruction::Store(_, _, _) => todo!(),
-            Instruction::Malloc(_) => todo!(),
             Instruction::Mov(r, v) => {
                 let rhs = self.infer_value(v);
                 self.update_register(r, rhs);
+                Ok(())
+            }
+
+            // heap instructions
+            Instruction::Load(r_tar, r_src, idx) => {
+                let output_type = self.fresh();
+                self.update_register(r_tar, output_type.clone());
+               
+                // expect that we at _least_ have a generic pointer with that idx set to the output type
+                let some_rho = self.fresh_rho();
+                let row_constraint = HashMap::from([(idx, output_type)]);
+                let expected_src = Ty::Ptr(row_constraint, Some(some_rho));
+                self.constrain_register(r_src, expected_src)
+            }
+            Instruction::StoreStrong(r_tar, idx, r_src) => {
+                let old_rho = self.fresh_rho();
+                let old_type = self.fresh();
+                let row_constraint = HashMap::from([(idx, old_type)]);
+                let expected_tar = Ty::Ptr(row_constraint, Some(old_rho));
+                self.constrain_register(r_tar, expected_tar)?;
+
+                // old_rho remembers all the fields set before
+                let new_type = self.register_types[&r_src].clone();
+                let new_known = HashMap::from([(idx, new_type)]);
+                let new_tar = Ty::UniqPtr(new_known, Some(old_rho));
+                self.update_register(r_tar, new_tar);
+                Ok(())
+            }
+            Instruction::Store(r_tar, idx, r_src) => {
+                let old_rho = self.fresh_rho();
+                let old_type = self.fresh();
+                let row_constraint = HashMap::from([(idx, old_type.clone())]);
+                let expected_tar = Ty::Ptr(row_constraint, Some(old_rho));
+                self.constrain_register(r_tar, expected_tar)?;
+                self.constrain_register(r_src, old_type)
+            }
+            Instruction::Malloc(r_tar, idx) => {
+                let ty = (0..idx).map(|idx| (idx, Ty::Int)).collect();
+                let ptr_ty = Ty::UniqPtr(ty, None);
+                self.update_register(r_tar, ptr_ty);
+                Ok(())
+            }
+            Instruction::Commit(r_tar) => {
+                let old_set = self.fresh_rho();
+                let old_ty = Ty::UniqPtr(HashMap::new(), Some(old_set));
+                let new_ty = Ty::Ptr(HashMap::new(), Some(old_set));
+                self.constrain_register(r_tar, old_ty)?;
+                self.update_register(r_tar, new_ty);
                 Ok(())
             }
         }
@@ -242,6 +315,7 @@ impl Checker {
 
     pub fn new() -> Checker {
         Checker {
+            cur_rho: 0,
             cur_var: 0,
             register_types: HashMap::new(),
             heap_types: HashMap::new(),

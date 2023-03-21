@@ -29,7 +29,9 @@ pub enum Instruction {
     BranchNonZero(Register, Value),
     Load(Register, Register, i64),
     Store(Register, i64, Register),
-    Malloc(Register),
+    StoreStrong(Register, i64, Register),
+    Malloc(Register, i64),
+    Commit(Register),
     Mov(Register, Value),
 }
 
@@ -42,7 +44,6 @@ pub enum Terminal {
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
     Add,
-    Mul,
     Sub,
 }
 

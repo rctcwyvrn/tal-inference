@@ -291,3 +291,54 @@ pub fn invalid_conflicting_typevars_1() -> Program {
         ("poly_halt".to_owned(), vec![], Terminal::Halt),
     ]
 }
+
+pub fn basic_heap() -> Program {
+    vec![
+        ("entry".to_owned(),
+        vec![
+            // r1 = malloc(5)
+            Instruction::Malloc(1, 5),
+            // r2 = r1[0]
+            // r2: unifVar(4)
+            Instruction::Load(2, 1, 0),
+            // r3 = entry
+            Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+            // r1[1] = r3
+            Instruction::StoreStrong(1, 1, 3),
+            // r2 = r1[1]
+            Instruction::Load(2, 1, 1),
+        ],
+        Terminal::Halt)
+    ]
+}
+
+pub fn poly_heap() -> Program {
+    vec![
+        ("entry".to_owned(),
+        vec![
+            Instruction::Malloc(1, 5),
+        ],
+        Terminal::Jump(Value::Word(WordValue::Label("store".to_owned())))),
+
+        ("store".to_owned(),
+        vec![
+            Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+            Instruction::StoreStrong(1, 1, 3),
+        ],
+        Terminal::Halt)
+    ]
+}
+
+pub fn full_suite() -> Vec<Program> {
+    vec![
+        make_add_program(),
+        make_jump_program(),
+        make_indirect_jump_program(),
+        ind_jump_wrong_registers(),
+        ind_jump_forgetting(),
+        invalid_ind_jump_requirements(),
+        invalid_conflicting_typevars_1(),
+        basic_heap(),
+        poly_heap(),
+    ]
+}

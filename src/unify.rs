@@ -1,9 +1,19 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 use crate::checker::*;
 
+#[derive(Debug, Clone)]
+enum RhoEntry {
+    Contains(Ty),
+    Absent,
+}
+
+type RhoMapping = HashMap<i64, RhoEntry>;
+
 impl Checker {
     pub fn try_unify(&self) -> Result<HashMap<usize, Ty>, TypeError> {
+        // might be absent
+        let mut rho_mappings: HashMap<usize, RhoMapping> = HashMap::new();
         let mut mapping = HashMap::new();
         let mut substitute = |v: &mut Vec<(Ty, Ty)>, x, t: Ty| {
             mapping.insert(x, t.clone());
@@ -17,6 +27,39 @@ impl Checker {
             });
         };
 
+        let mut check_rho = |eqs: &mut Vec<(Ty, Ty)>, new_rho: RhoMapping, rho_id | {
+            let updated_rho = if rho_mappings.contains_key(&rho_id) {
+                let mut mapping = rho_mappings[&rho_id].clone();
+                // debug
+                println!("++ Checking rho({}) consistency | {:?} = {:?}", rho_id, mapping, new_rho);
+
+                for key in new_rho.keys() {
+                    if mapping.contains_key(key) {
+                        match (mapping[key].clone(), new_rho[key].clone()) {
+                            (RhoEntry::Absent, RhoEntry::Absent) => continue, // both are absent
+                            // one says a field is absent, the other says it is not
+                            (RhoEntry::Absent, RhoEntry::Contains(_)) | (RhoEntry::Contains(_), RhoEntry::Absent) => return Err(TypeError::RhoConflict),
+                            (RhoEntry::Contains(lhs), RhoEntry::Contains(rhs)) => {
+                                eqs.push((lhs, rhs));
+                            }
+                        }
+                    } else {
+                        //t he new mapping sets a field (either to a ty or absent) that the old mapping does not restrict at all
+                        // so its valid, but shove the new information into the mapping
+                        mapping.insert(*key, new_rho[key].clone());
+                    }
+                }
+
+                mapping
+            } else {
+                new_rho
+            };
+
+            println!("++ Inserting rho({}) = {:?}", rho_id, updated_rho);
+            rho_mappings.insert(rho_id, updated_rho);
+            Ok(())
+        };
+
         let mut eqs = self.constraints.clone();
         while !eqs.is_empty() {
             let next = eqs.pop().unwrap();
@@ -28,12 +71,65 @@ impl Checker {
                         eqs.push((fn_a[&r].clone(), fn_b[&r].clone()));
                     }
                 }
+
+                // expect lhs to be at least as strong as rhs (scuffed subtyping whoops)
+                (Ty::UniqPtr(l_set, l_rho), Ty::UniqPtr(r_set, r_rho)) |
+                (Ty::UniqPtr(l_set, l_rho), Ty::Ptr(r_set, r_rho)) |
+                (Ty::Ptr(l_set, l_rho), Ty::Ptr(r_set, r_rho)) => {
+                    // do the unification switcheroo
+                    // https://ahnfelt.medium.com/row-polymorphism-crash-course-587f1e7b7c47
+                    println!("[+] unifying {:?} {:?} =  {:?} {:?} ", l_set, l_rho, r_set, r_rho);
+                    let mut r_rho_mapping = HashMap::new();
+                    for l_key in l_set.keys() {
+                        if r_set.contains_key(l_key) { 
+                            eqs.push((l_set[l_key].clone(), r_set[l_key].clone()));
+
+                            if r_rho.is_some() {
+                                println!("-- rhs rho does not have {:?}", l_key);
+                                r_rho_mapping.insert(*l_key, RhoEntry::Absent);
+                            }
+                        } else {
+                            if r_rho.is_some() {
+                                println!("-- rhs is missing key {:?} but it has rho, inserting", l_key);
+                                r_rho_mapping.insert(*l_key, RhoEntry::Contains(l_set[l_key].clone()));
+                            } else {
+                                return Err(TypeError::NoRho)
+                            }
+                        }
+                    }
+
+                    let mut l_rho_mapping = HashMap::new();
+                    for r_key in r_set.keys() {
+                        if l_set.contains_key(r_key) {
+                            if l_rho.is_some() {
+                                println!("-- lhs rho does not have {:?}", r_key);
+                                l_rho_mapping.insert(*r_key, RhoEntry::Absent);
+                            } 
+                        } else {
+                            if l_rho.is_some() {
+                                println!("-- lhs is missing key {:?} but it has rho, inserting", r_key);
+                                l_rho_mapping.insert(*r_key, RhoEntry::Contains(r_set[r_key].clone()));
+                            } else {
+                                return Err(TypeError::NoRho)
+                            }
+                        }
+                    }
+
+                    if let Some(Rho::Rho(r)) = l_rho {
+                        check_rho(&mut eqs,  l_rho_mapping, r)?;
+                    }
+
+                    if let Some(Rho::Rho(r)) = r_rho {
+                        check_rho(&mut eqs, r_rho_mapping, r)?;
+                    }
+                }
                 _ => {
                     println!("> Failed on: {:?}", next);
                     return Err(TypeError::FailedUnify);
                 }
             }
         }
+        println!("!! rhos {:?}", rho_mappings);
         Ok(mapping)
     }
 
@@ -136,6 +232,8 @@ impl Checker {
                         break;
                     }
                 }
+                Ty::Ptr(_, _) => todo!(),
+                Ty::UniqPtr(_, _) => todo!(),
             }
         }
         var
