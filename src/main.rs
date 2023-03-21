@@ -4,8 +4,8 @@ mod checker;
 mod data;
 mod debug;
 mod syntax;
-mod unify;
 mod tests;
+mod unify;
 
 fn main() {
     let suite = full_suite();
@@ -16,8 +16,10 @@ fn main() {
     // let prog = make_unfortunately_invalid_program();
     // let prog = invalid_ind_jump_requirements();
     // let prog = invalid_conflicting_typevars_1();
-    let prog = basic_heap();
+    // let prog = basic_heap();
     // let prog = poly_heap();
+    let prog = ptr_information_loss_1();
+    let prog = ptr_information_loss_2();
 
     let mut checker = checker::Checker::new();
     println!("Res {:?}", checker.check(prog));

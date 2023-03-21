@@ -1,4 +1,4 @@
-use crate::syntax::{*};
+use crate::syntax::*;
 
 pub fn make_add_program() -> Program {
     // mov r1 1
@@ -265,13 +265,15 @@ pub fn invalid_conflicting_typevars_1() -> Program {
                 Value::Word(WordValue::Label("expects_different".to_owned())),
             )],
             // try to pass it a function that expects different types for r2 and r3
-            Terminal::Jump(Value::Word(WordValue::Label("mov_then_indirect_jump".to_owned()))),
+            Terminal::Jump(Value::Word(WordValue::Label(
+                "mov_then_indirect_jump".to_owned(),
+            ))),
         ),
         (
             "mov_then_indirect_jump".to_owned(),
             vec![
                 // r2 and r3 have the same type variable
-                Instruction::Mov(2, Value::Register(3))
+                Instruction::Mov(2, Value::Register(3)),
             ],
             // note: this actually fails because we cant call any function that expects any concrete types
             // the only function we could jump to here would be
@@ -284,8 +286,8 @@ pub fn invalid_conflicting_typevars_1() -> Program {
             // expects an int in r2 and a label in r3
             vec![
                 Instruction::Arith(Op::Sub, 1, 2, Value::Register(2)),
-                Instruction::BranchNonZero(2, Value::Register(3))
-                ],
+                Instruction::BranchNonZero(2, Value::Register(3)),
+            ],
             Terminal::Halt,
         ),
         ("poly_halt".to_owned(), vec![], Terminal::Halt),
@@ -293,8 +295,8 @@ pub fn invalid_conflicting_typevars_1() -> Program {
 }
 
 pub fn basic_heap() -> Program {
-    vec![
-        ("entry".to_owned(),
+    vec![(
+        "entry".to_owned(),
         vec![
             // r1 = malloc(5)
             Instruction::Malloc(1, 5),
@@ -308,24 +310,65 @@ pub fn basic_heap() -> Program {
             // r2 = r1[1]
             Instruction::Load(2, 1, 1),
         ],
-        Terminal::Halt)
-    ]
+        Terminal::Halt,
+    )]
+}
+
+// in order to typecheck that this fails
+pub fn ptr_information_loss_1() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+            // start with a malloc of 1
+            Instruction::Malloc(1, 1),
+            // r1 is a uniqptr with one field + rho(1)
+            // rho(1) asserts that it does not have field 1 but has all other fields
+            Instruction::StoreStrong(1, 0, 3),
+            // rho(2) asserts that it does not have field 1
+            Instruction::StoreStrong(1, 0, 3),
+            // load fails because both ptr and rho(2) dont have field 1
+            Instruction::Load(2, 1, 1),
+        ],
+        Terminal::Halt,
+    )]
+}
+
+// we end up forgetting information
+pub fn ptr_information_loss_2() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+            // start with a malloc of 2
+            Instruction::Malloc(1, 2),
+            // r1 is a uniqptr with one field + rho(1)
+            // rho(1) asserts that it does not have field 1 but has all other fields
+            Instruction::StoreStrong(1, 0, 3),
+            // rho(2) asserts that it does not have field 1
+            Instruction::StoreStrong(1, 0, 3),
+            // all we know is that we have a rho(2), which doesnt know we malloc'd enough space earlier
+            Instruction::Load(2, 1, 1),
+        ],
+        Terminal::Halt,
+    )]
 }
 
 pub fn poly_heap() -> Program {
     vec![
-        ("entry".to_owned(),
-        vec![
-            Instruction::Malloc(1, 5),
-        ],
-        Terminal::Jump(Value::Word(WordValue::Label("store".to_owned())))),
-
-        ("store".to_owned(),
-        vec![
-            Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
-            Instruction::StoreStrong(1, 1, 3),
-        ],
-        Terminal::Halt)
+        (
+            "entry".to_owned(),
+            vec![Instruction::Malloc(1, 5)],
+            Terminal::Jump(Value::Word(WordValue::Label("store".to_owned()))),
+        ),
+        (
+            "store".to_owned(),
+            vec![
+                Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+                Instruction::StoreStrong(1, 1, 3),
+            ],
+            Terminal::Halt,
+        ),
     ]
 }
 
@@ -339,6 +382,8 @@ pub fn full_suite() -> Vec<Program> {
         invalid_ind_jump_requirements(),
         invalid_conflicting_typevars_1(),
         basic_heap(),
+        ptr_information_loss_1(),
+        ptr_information_loss_2(),
         poly_heap(),
     ]
 }

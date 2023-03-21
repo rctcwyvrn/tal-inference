@@ -1,4 +1,6 @@
 use crate::syntax::*;
+use crate::unify::Unifier;
+
 use core::panic;
 use std::{collections::HashMap, fmt::Display};
 use thiserror::Error;
@@ -12,17 +14,14 @@ pub enum Ty {
     Code(CodeTy),
     UnifVar(usize), // really should be in a TyX type but im lazy
     TyVar(usize),
-    
+
     // Pointer types
     Ptr(HashMap<i64, Ty>, Option<Rho>),
     UniqPtr(HashMap<i64, Ty>, Option<Rho>),
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Rho {
-    Rho(usize)
-}
-
+pub struct Rho(pub usize);
 
 impl Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -97,7 +96,7 @@ impl Checker {
 
     fn fresh_rho(&mut self) -> Rho {
         self.cur_rho += 1;
-        return Rho::Rho(self.cur_rho);
+        return Rho(self.cur_rho);
     }
 
     fn update_register(&mut self, r: Register, ty: Ty) {
@@ -139,7 +138,7 @@ impl Checker {
 
         // constrain the value that we're jumping to to be a code type
         let mut success = self.constrain(&val_ty, &Ty::Code(code_ty.clone()));
-        
+
         // note: we could update the register (if val is a register) to be the code type
         // which would reduce unifications a little, probably doesnt matter
 
@@ -156,7 +155,12 @@ impl Checker {
                 }
                 // otherwise we have to check that it can be satisfied
                 _ => {
-                    println!("- Adding jump satisfy for r_{} ({:?} <: {:?})", r, self.register_types[&r].clone(), code_ty[&r].clone());
+                    println!(
+                        "- Adding jump satisfy for r_{} ({:?} <: {:?})",
+                        r,
+                        self.register_types[&r].clone(),
+                        code_ty[&r].clone()
+                    );
                     jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
                 }
             }
@@ -194,7 +198,7 @@ impl Checker {
             Instruction::Load(r_tar, r_src, idx) => {
                 let output_type = self.fresh();
                 self.update_register(r_tar, output_type.clone());
-               
+
                 // expect that we at _least_ have a generic pointer with that idx set to the output type
                 let some_rho = self.fresh_rho();
                 let row_constraint = HashMap::from([(idx, output_type)]);
@@ -203,24 +207,31 @@ impl Checker {
             }
             Instruction::StoreStrong(r_tar, idx, r_src) => {
                 let old_rho = self.fresh_rho();
+                // generate a unifvar for the old type, but don't constrain it in any way
                 let old_type = self.fresh();
                 let row_constraint = HashMap::from([(idx, old_type)]);
-                let expected_tar = Ty::Ptr(row_constraint, Some(old_rho));
+                // check that we had a UniqPtr with idx set to _any_ type
+                // with old_rho holding other fields
+                let expected_tar = Ty::UniqPtr(row_constraint, Some(old_rho));
                 self.constrain_register(r_tar, expected_tar)?;
 
                 // old_rho remembers all the fields set before
                 let new_type = self.register_types[&r_src].clone();
                 let new_known = HashMap::from([(idx, new_type)]);
+                // we now have a uniqptr with all the old fields and the one new field
                 let new_tar = Ty::UniqPtr(new_known, Some(old_rho));
                 self.update_register(r_tar, new_tar);
                 Ok(())
             }
             Instruction::Store(r_tar, idx, r_src) => {
+                // Similar idea to StoreStrong
                 let old_rho = self.fresh_rho();
                 let old_type = self.fresh();
                 let row_constraint = HashMap::from([(idx, old_type.clone())]);
                 let expected_tar = Ty::Ptr(row_constraint, Some(old_rho));
                 self.constrain_register(r_tar, expected_tar)?;
+                // But now we constrain our register to have the old type 
+                // and we don't update the pointer type at all
                 self.constrain_register(r_src, old_type)
             }
             Instruction::Malloc(r_tar, idx) => {
@@ -291,10 +302,14 @@ impl Checker {
         }
 
         // unify the variables in the block bodies
-        let mapping = self.try_unify()?;
-        let mapping = self.chase_all_to_root(mapping);
+        let mut unifier =
+            Unifier::new(self.constraints.clone(), self.satisfy.clone(), self.cur_var);
+
+        unifier.try_unify()?;
+        unifier.chase_all_to_root();
 
         println!("--- Mapping --- ");
+        let mapping = unifier.mapping.clone();
         for v in 1..=self.cur_var {
             if !mapping.contains_key(&v) {
                 println!("  unifVar({}) => unbound", v);
@@ -305,10 +320,10 @@ impl Checker {
 
         // debugging
         self.pretty_heap();
-        self.pretty_heap_w_mapping(mapping.clone());
+        self.pretty_heap_w_mapping(&mapping);
 
         // unify the jumps to labelled blocks
-        self.try_satisfy(&mapping)?;
+        unifier.try_satisfy()?;
 
         Ok(())
     }
