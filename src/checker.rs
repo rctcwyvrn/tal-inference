@@ -23,19 +23,6 @@ pub enum Ty {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Rho(pub usize);
 
-impl Display for Ty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Ty::Int => write!(f, "Int"),
-            Ty::Code(free) => write!(f, "(free = {:?})", free),
-            Ty::UnifVar(id) => write!(f, "unifvar_{}", *id),
-            Ty::TyVar(id) => write!(f, "var_{}", *id),
-            Ty::Ptr(ty, rho) => write!(f, "ptr<{:?} | rho = {:?}>", *ty, rho),
-            Ty::UniqPtr(ty, rho) => write!(f, "uptr<{:?} | rho = {:?}>", *ty, rho),
-        }
-    }
-}
-
 pub struct Checker {
     // for fresh unifvars
     pub cur_var: usize,
@@ -64,16 +51,22 @@ pub enum TypeError {
     #[error("failed to unify")]
     FailedUnify,
 
-    #[error("no rho to row poly over")]
-    NoRho,
-
     #[error("rho conflict")]
     RhoConflict,
+
+    #[error("rho too small")]
+    RhoTooSmall,
+
+    #[error("tried to add two rhos with the same indices together")]
+    RhoFailedAdd,
+
+    #[error("pointers conflict")]
+    PtrConflict,
 }
 
 impl Checker {
     fn constrain(&mut self, a: &Ty, b: &Ty) -> bool {
-        println!("> Constraining {:?} == {:?}", a, b);
+        println!("> Constraining {} == {}", a, b);
         match (a, b) {
             (Ty::Code(_), Ty::Code(_)) // both code
             | (_, Ty::UnifVar(_)) | (Ty::UnifVar(_), _) // contains a variable
@@ -100,7 +93,7 @@ impl Checker {
     }
 
     fn update_register(&mut self, r: Register, ty: Ty) {
-        println!("> Updating r{} to {:?}", r, ty);
+        println!("> Updating r{} to {}", r, ty);
         self.register_types.insert(r, ty);
     }
 
@@ -156,10 +149,10 @@ impl Checker {
                 // otherwise we have to check that it can be satisfied
                 _ => {
                     println!(
-                        "- Adding jump satisfy for r_{} ({:?} <: {:?})",
+                        "- Adding jump satisfy for r_{} ({} <: {})",
                         r,
-                        self.register_types[&r].clone(),
-                        code_ty[&r].clone()
+                        self.register_types[&r],
+                        code_ty[&r]
                     );
                     jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
                 }
@@ -230,7 +223,7 @@ impl Checker {
                 let row_constraint = HashMap::from([(idx, old_type.clone())]);
                 let expected_tar = Ty::Ptr(row_constraint, Some(old_rho));
                 self.constrain_register(r_tar, expected_tar)?;
-                // But now we constrain our register to have the old type 
+                // But now we constrain our register to have the old type
                 // and we don't update the pointer type at all
                 self.constrain_register(r_src, old_type)
             }
@@ -298,7 +291,7 @@ impl Checker {
 
         println!("--- Constraints --- ");
         for c in &self.constraints {
-            println!("- {:?}", c);
+            println!("- {} = {}", c.0, c.1);
         }
 
         // unify the variables in the block bodies
@@ -311,11 +304,7 @@ impl Checker {
         println!("--- Mapping --- ");
         let mapping = unifier.mapping.clone();
         for v in 1..=self.cur_var {
-            if !mapping.contains_key(&v) {
-                println!("  unifVar({}) => unbound", v);
-            } else {
-                println!("  unifVar({}) => {:?}", v, mapping[&v]);
-            }
+            println!("- unifVar({}) => {}", v, mapping[&v]);
         }
 
         // debugging

@@ -1,9 +1,11 @@
 use core::panic;
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+};
 
-use crate::checker::*;
+use crate::{checker::*, debug::sort_for_print};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RhoEntry {
     Contains(Ty),
     Absent,
@@ -22,6 +24,11 @@ pub struct Unifier {
 // todo: newtype wrap usize being the unifvar types, along with seperating out the whole TyX thing
 
 impl Unifier {
+    fn constrain(&mut self, a: Ty, b: Ty) {
+        println!("> Constraining {} = {}", a, b);
+        self.constraints.push_back((a, b));
+    }
+
     fn substitute(
         mapping: &mut HashMap<usize, Ty>,
         eqs: &mut VecDeque<(Ty, Ty)>,
@@ -52,103 +59,114 @@ impl Unifier {
         r_set: HashMap<i64, Ty>,
         r_rho: Option<Rho>,
     ) -> Result<(), TypeError> {
-        // do the unification switcheroo
-        // https://ahnfelt.medium.com/row-polymorphism-crash-course-587f1e7b7c47
         println!(
-            "[+] unifying {:?} {:?} =  {:?} {:?} ",
-            l_set, l_rho, r_set, r_rho
+            "[+] Unifying pointers ({},{:?}) = ({},{:?})",
+            sort_for_print(&l_set), l_rho, 
+            sort_for_print(&r_set), r_rho
         );
-        let mut r_rho_mapping = HashMap::new();
-        for l_key in l_set.keys() {
-            if r_set.contains_key(l_key) {
-                self.constraints
-                    .push_back((l_set[l_key].clone(), r_set[l_key].clone()));
-
-                if r_rho.is_some() {
-                    println!("-- rhs rho does not have {:?}", l_key);
-                    r_rho_mapping.insert(*l_key, RhoEntry::Absent);
-                }
-            } else {
-                if r_rho.is_some() {
-                    println!(
-                        "-- rhs is missing key {:?} but it has rho, inserting",
-                        l_key
-                    );
-                    r_rho_mapping.insert(*l_key, RhoEntry::Contains(l_set[l_key].clone()));
-                } else {
-                    return Err(TypeError::NoRho);
+        let l_set = Unifier::convert(l_set);
+        let r_set = Unifier::convert(r_set);
+        match (l_rho, r_rho) {
+            (None, None) => {
+                if l_set != r_set {
+                    return Err(TypeError::PtrConflict);
                 }
             }
-        }
-
-        let mut l_rho_mapping = HashMap::new();
-        for r_key in r_set.keys() {
-            if l_set.contains_key(r_key) {
-                if l_rho.is_some() {
-                    println!("-- lhs rho does not have {:?}", r_key);
-                    l_rho_mapping.insert(*r_key, RhoEntry::Absent);
-                }
-            } else {
-                if l_rho.is_some() {
-                    println!(
-                        "-- lhs is missing key {:?} but it has rho, inserting",
-                        r_key
-                    );
-                    l_rho_mapping.insert(*r_key, RhoEntry::Contains(r_set[r_key].clone()));
-                } else {
-                    return Err(TypeError::NoRho);
-                }
+            (None, Some(rhs_rho)) => {
+                let expect = self.subtract(l_set, r_set)?;
+                self.unify_rho(rhs_rho, expect)?
             }
-        }
-
-        if let Some(Rho(r)) = l_rho {
-            self.unify_rho(l_rho_mapping, r)?;
-        }
-
-        if let Some(Rho(r)) = r_rho {
-            self.unify_rho(r_rho_mapping, r)?;
+            (Some(lhs_rho), None) => {
+                let expect = self.subtract(r_set, l_set)?;
+                self.unify_rho(lhs_rho, expect)?
+            }
+            (Some(lhs_rho), Some(r_known)) if self.rho_mappings.contains_key(&r_known.0) => {
+                let r_rho = self.rho_mappings[&r_known.0].clone();
+                let rhs = self.add(r_set, r_rho)?;
+                let expect = self.subtract(rhs, l_set)?;
+                self.unify_rho(lhs_rho, expect)?
+            }
+            (Some(l_known), Some(rhs_rho)) if self.rho_mappings.contains_key(&l_known.0) => {
+                let l_rho = self.rho_mappings[&l_known.0].clone();
+                let lhs = self.add(l_set, l_rho)?;
+                let expect = self.subtract(lhs, r_set)?;
+                self.unify_rho(rhs_rho, expect)?
+            }
+            _ => {
+                panic!("I think this is unreachable? When would this happen?")
+            }
         }
         Ok(())
     }
 
-    fn unify_rho(&mut self, new_rho: RhoMapping, rho_id: usize) -> Result<(), TypeError> {
-        if self.rho_mappings.contains_key(&rho_id) {
-            let mapping = self.rho_mappings.get_mut(&rho_id).unwrap();
-            // debug
-            println!(
-                "++ Checking rho({}) consistency | {:?} = {:?}",
-                rho_id, mapping, new_rho
-            );
+    fn convert(ptr_mapping: HashMap<i64, Ty>) -> RhoMapping {
+        ptr_mapping
+            .into_iter()
+            .map(|(idx, ty)| (idx, RhoEntry::Contains(ty)))
+            .collect()
+    }
 
-            for key in new_rho.keys() {
-                if mapping.contains_key(key) {
-                    match (mapping[key].clone(), new_rho[key].clone()) {
-                        // both are absent
-                        (RhoEntry::Absent, RhoEntry::Absent) => continue,
-                        // one says a field is absent, the other says it is not, which is invalid
-                        (RhoEntry::Absent, RhoEntry::Contains(_))
-                        | (RhoEntry::Contains(_), RhoEntry::Absent) => {
-                            return Err(TypeError::RhoConflict)
-                        }
-                        // Unify the two rho constraints
-                        (RhoEntry::Contains(lhs), RhoEntry::Contains(rhs)) => {
-                            self.constraints.push_back((lhs, rhs));
-                        }
-                    }
-                } else {
-                    // the new rho contains more fields than the old rho can guarantee
-                    return Err(TypeError::RhoConflict);
+    fn add(&mut self, set: RhoMapping, rho: RhoMapping) -> Result<RhoMapping, TypeError> {
+        println!("(~) Computing {} + {}", sort_for_print(&set), sort_for_print(&rho));
+        let mut result = set.clone();
+        for idx in rho.keys() {
+            if !result.contains_key(idx) {
+                result.insert(*idx, rho[idx].clone());
+            } else {
+                // can't add two things that set the same idx
+                return Err(TypeError::RhoFailedAdd);
+            }
+        }
+        println!("(~) {} + {} = {}", sort_for_print(&set), sort_for_print(&rho), sort_for_print(&result));
+        Ok(result)
+    }
+
+    fn subtract(&mut self, l_set: RhoMapping, r_set: RhoMapping) -> Result<RhoMapping, TypeError> {
+        println!("(~) Computing {} - {}", sort_for_print(&l_set), sort_for_print(&r_set));
+        let mut result = l_set.clone();
+        for idx in r_set.keys() {
+            if result.contains_key(idx) {
+                result.remove(idx);
+                match (l_set[idx].clone(), r_set[idx].clone()) {
+                    // both contain a type
+                    (RhoEntry::Contains(t1), RhoEntry::Contains(t2)) => self.constrain(t1, t2),
+                    // both don't contain a type
+                    (RhoEntry::Absent, RhoEntry::Absent) => continue,
+                    // conflict
+                    _ => return Err(TypeError::RhoConflict),
                 }
+            } else {
+                // different sets of keys
+                return Err(TypeError::RhoTooSmall);
+            }
+        }
+        println!("(~) {} - {} = {}", sort_for_print(&l_set), sort_for_print(&r_set), sort_for_print(&result));
+        Ok(result)
+    }
+
+    fn unify_rho(&mut self, rho: Rho, set: RhoMapping) -> Result<(), TypeError> {
+        let rho_id = rho.0;
+        if self.rho_mappings.contains_key(&rho_id) {
+            println!(
+                "- rho({:?}) requirements match? {} = {}",
+                rho_id, 
+                sort_for_print(&set), 
+                sort_for_print(&self.rho_mappings[&rho_id])
+            );
+            // check that they exactly match
+            if set != self.rho_mappings[&rho_id] {
+                return Err(TypeError::RhoConflict);
             }
         } else {
-            println!("++ Inserting new rho({}) = {:?}", rho_id, new_rho);
-            self.rho_mappings.insert(rho_id, new_rho);
-        };
-
+            println!("- new rho({:?}) {}", rho_id, sort_for_print(&set));
+            self.rho_mappings.insert(rho_id, set);
+        }
         Ok(())
     }
 
     pub fn try_unify(&mut self) -> Result<(), TypeError> {
+        println!("--- starting unify ---");
+
         while !self.constraints.is_empty() {
             let next = self.constraints.pop_front().unwrap();
             match next {
@@ -158,7 +176,7 @@ impl Unifier {
                 }
                 (Ty::Code(fn_a), Ty::Code(fn_b)) => {
                     for r in 1..=MAX_REGISTER {
-                        self.constraints.push_back((fn_a[&r].clone(), fn_b[&r].clone()));
+                        self.constrain(fn_a[&r].clone(), fn_b[&r].clone());
                     }
                 }
 
@@ -169,7 +187,7 @@ impl Unifier {
                     self.unify_ptrs(l_set, l_rho, r_set, r_rho)?
                 }
                 _ => {
-                    println!("> Failed on: {:?}", next);
+                    println!("> Failed on: {} = {}", next.0, next.1);
                     return Err(TypeError::FailedUnify);
                 }
             }
@@ -178,7 +196,7 @@ impl Unifier {
         println!("--- rhos --- ");
         let rhos = self.rho_mappings.keys().collect::<Vec<&usize>>();
         for rho_id in rhos {
-            println!("rho({}) = {:?}", rho_id, self.rho_mappings[rho_id])
+            println!("rho({}) = {}", rho_id, sort_for_print(&self.rho_mappings[rho_id]))
         }
         Ok(())
     }
@@ -221,7 +239,7 @@ impl Unifier {
                     }
                 }
                 _ => {
-                    println!("> Failed satisfy_jump on: {:?}", next);
+                    println!("> Failed satisfy_jump on: {} = {}", next.0, next.1);
                     return Err(TypeError::FailedJump);
                 }
             }
