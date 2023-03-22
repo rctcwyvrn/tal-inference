@@ -1,7 +1,5 @@
 use core::panic;
-use std::{
-    collections::{HashMap, VecDeque},
-};
+use std::collections::{HashMap, VecDeque};
 
 use crate::{checker::*, debug::sort_for_print};
 
@@ -61,8 +59,10 @@ impl Unifier {
     ) -> Result<(), TypeError> {
         println!(
             "\n[+] Unifying pointers ({},{:?}) = ({},{:?})",
-            sort_for_print(&l_set), l_rho, 
-            sort_for_print(&r_set), r_rho
+            sort_for_print(&l_set),
+            l_rho,
+            sort_for_print(&r_set),
+            r_rho
         );
         let l_set = Unifier::convert(l_set);
         let r_set = Unifier::convert(r_set);
@@ -108,7 +108,11 @@ impl Unifier {
     }
 
     fn add(&mut self, set: RhoMapping, rho: RhoMapping) -> Result<RhoMapping, TypeError> {
-        println!("(~) Computing X + Y for X = {} | Y = {}", sort_for_print(&set), sort_for_print(&rho));
+        println!(
+            "(~) Computing X + Y for X = {} | Y = {}",
+            sort_for_print(&set),
+            sort_for_print(&rho)
+        );
         let mut result = set.clone();
         for idx in rho.keys() {
             if !result.contains_key(idx) {
@@ -123,7 +127,11 @@ impl Unifier {
     }
 
     fn subtract(&mut self, l_set: RhoMapping, r_set: RhoMapping) -> Result<RhoMapping, TypeError> {
-        println!("(~) Computing X - Y for X = {} | Y = {}", sort_for_print(&l_set), sort_for_print(&r_set));
+        println!(
+            "(~) Computing X - Y for X = {} | Y = {}",
+            sort_for_print(&l_set),
+            sort_for_print(&r_set)
+        );
         let mut result = l_set.clone();
         for idx in r_set.keys() {
             if result.contains_key(idx) {
@@ -151,8 +159,8 @@ impl Unifier {
         if self.rho_mappings.contains_key(&rho_id) {
             println!(
                 "- rho({:?}) requirements match? {} = {}",
-                rho_id, 
-                sort_for_print(&set), 
+                rho_id,
+                sort_for_print(&set),
                 sort_for_print(&self.rho_mappings[&rho_id])
             );
             // check that they exactly match
@@ -198,12 +206,19 @@ impl Unifier {
         println!("--- rhos --- ");
         let rhos = self.rho_mappings.keys().collect::<Vec<&usize>>();
         for rho_id in rhos {
-            println!("rho({}) = {}", rho_id, sort_for_print(&self.rho_mappings[rho_id]))
+            println!(
+                "rho({}) = {}",
+                rho_id,
+                sort_for_print(&self.rho_mappings[rho_id])
+            )
         }
         Ok(())
     }
 
-    fn try_satisfy_jump(&mut self, jump: VecDeque<(Ty, Ty)>) -> Result<(HashMap<usize, Ty>, HashMap<usize, RhoMapping>), TypeError> {
+    fn try_satisfy_jump(
+        &mut self,
+        jump: VecDeque<(Ty, Ty)>,
+    ) -> Result<(HashMap<usize, Ty>, HashMap<usize, RhoMapping>), TypeError> {
         let mut mapping = HashMap::new();
         let mut additional_rhos = HashMap::new();
         let mut eqs = jump;
@@ -235,27 +250,38 @@ impl Unifier {
                 (Ty::UniqPtr(l_set, l_rho), Ty::UniqPtr(r_set, r_rho))
                 | (Ty::UniqPtr(l_set, l_rho), Ty::Ptr(r_set, r_rho))
                 | (Ty::Ptr(l_set, l_rho), Ty::Ptr(r_set, r_rho)) => {
-                    println!("(++) Attempting to substitute ({:?}, {:?}) for ({:?}, {:?})", l_set, l_rho, r_set, r_rho);
-                    
+                    println!(
+                        "(++) Attempting to substitute ({:?}, {:?}) for ({:?}, {:?})",
+                        l_set, l_rho, r_set, r_rho
+                    );
+
                     // Convert the input l_rho into a concrete mapping
-                    let l_rho = if let Some(id) = l_rho { 
-                        if self.rho_mappings.contains_key(&id.0) { 
+                    let l_rho = if let Some(id) = l_rho {
+                        if self.rho_mappings.contains_key(&id.0) {
                             self.rho_mappings[&id.0].clone()
                         } else {
                             // make no assumptions about an unbound l_rho
                             HashMap::new()
-                        } 
-                    } else { 
+                        }
+                    } else {
                         // no l_rho
-                        HashMap::new() 
+                        HashMap::new()
                     };
-                    let lhs = self.add(l_rho, Unifier::convert(l_set))?; 
+                    let lhs = self.add(l_rho, Unifier::convert(l_set))?;
 
-                    let r_rho_bound = if let Some(id) = r_rho { self.rho_mappings.contains_key(&id.0) } else { true };
+                    let r_rho_bound = if let Some(id) = r_rho {
+                        self.rho_mappings.contains_key(&id.0)
+                    } else {
+                        true
+                    };
                     if r_rho_bound {
                         // case: right rho is bound
                         // check that l_set + l_rho = r_set + r_rho
-                        let r_rho = if let Some(id) = r_rho { self.rho_mappings[&id.0].clone() } else { HashMap::new() };
+                        let r_rho = if let Some(id) = r_rho {
+                            self.rho_mappings[&id.0].clone()
+                        } else {
+                            HashMap::new()
+                        };
                         let rhs = self.add(r_rho, Unifier::convert(r_set))?;
                         if lhs != rhs {
                             return Err(TypeError::FailedJumpOnRho);
@@ -264,13 +290,24 @@ impl Unifier {
                         // case: right rho is not bound
                         // check that l_set + l_rho <: r_set
                         let rhs = Unifier::convert(r_set);
-                        println!("(++) try_satisfy_rho {} <: {}", sort_for_print(&lhs), sort_for_print(&rhs));
+                        println!(
+                            "(++) try_satisfy_rho {} <: {}",
+                            sort_for_print(&lhs),
+                            sort_for_print(&rhs)
+                        );
                         for key in rhs.keys() {
-                            if !lhs.contains_key(key) { return Err(TypeError::FailedJumpOnRho) }
+                            if !lhs.contains_key(key) {
+                                return Err(TypeError::FailedJumpOnRho);
+                            }
                             match (lhs[key].clone(), rhs[key].clone()) {
-                                (RhoEntry::Contains(l), RhoEntry::Contains(r)) => eqs.push_back((l,r)),
+                                (RhoEntry::Contains(l), RhoEntry::Contains(r)) => {
+                                    eqs.push_back((l, r))
+                                }
                                 (RhoEntry::Absent, RhoEntry::Absent) => continue,
-                                (RhoEntry::Contains(_), RhoEntry::Absent) | (RhoEntry::Absent, RhoEntry::Contains(_)) => return Err(TypeError::FailedJumpOnRho),
+                                (RhoEntry::Contains(_), RhoEntry::Absent)
+                                | (RhoEntry::Absent, RhoEntry::Contains(_)) => {
+                                    return Err(TypeError::FailedJumpOnRho)
+                                }
                             }
                         }
                         let mut rho_ty = HashMap::new();
@@ -313,10 +350,14 @@ impl Unifier {
 
             print!("rhos: [");
             for rho_id in rho_mappings.keys() {
-                print!("rho({})={}, ", rho_id, sort_for_print(&rho_mappings[rho_id]))
+                print!(
+                    "rho({})={}, ",
+                    rho_id,
+                    sort_for_print(&rho_mappings[rho_id])
+                )
             }
             println!("]");
-            
+
             println!("---");
         }
         Ok(())
@@ -345,12 +386,12 @@ impl Unifier {
             Ty::Ptr(set, rho) | Ty::UniqPtr(set, rho) => {
                 let mut roots = HashMap::new();
                 for idx in set.keys() {
-                    roots.insert(*idx, self.chase_to_root(set[idx].clone())); 
+                    roots.insert(*idx, self.chase_to_root(set[idx].clone()));
                 }
                 var = match &var {
                     Ty::Ptr(_, _) => Ty::Ptr(roots, rho.clone()),
                     Ty::UniqPtr(_, _) => Ty::UniqPtr(roots, rho.clone()),
-                    _ => panic!("unreachable")
+                    _ => panic!("unreachable"),
                 }
             }
         }

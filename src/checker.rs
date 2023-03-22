@@ -1,5 +1,5 @@
-use crate::{syntax::*, debug::sort_for_print};
 use crate::unify::Unifier;
+use crate::{debug::sort_for_print, syntax::*};
 
 use core::panic;
 use std::{collections::HashMap, fmt::Display};
@@ -47,7 +47,7 @@ pub enum TypeError {
 
     #[error("failed to constrain jump")]
     FailedJump,
-    
+
     #[error("failed to constrain rhos for jump")]
     FailedJumpOnRho,
 
@@ -153,9 +153,7 @@ impl Checker {
                 _ => {
                     println!(
                         "- Adding jump satisfy for r_{} ({} <: {})",
-                        r,
-                        self.register_types[&r],
-                        code_ty[&r]
+                        r, self.register_types[&r], code_ty[&r]
                     );
                     jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
                 }

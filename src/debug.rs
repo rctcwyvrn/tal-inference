@@ -1,7 +1,9 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::{checker::*, unify::{Unifier, RhoEntry}};
-
+use crate::{
+    checker::*,
+    unify::{RhoEntry, Unifier},
+};
 
 impl Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -34,19 +36,23 @@ impl Display for RhoEntry {
     }
 }
 
-pub fn sort_for_print<K,V>(map: &HashMap<K, V>) -> PrintableVec<(K,V)> where K: Ord+Clone, V: Clone {
-    let mut v: Vec<(K,V)> = map.clone().into_iter().collect();
+pub fn sort_for_print<K, V>(map: &HashMap<K, V>) -> PrintableVec<(K, V)>
+where
+    K: Ord + Clone,
+    V: Clone,
+{
+    let mut v: Vec<(K, V)> = map.clone().into_iter().collect();
     v.sort_by(|(lk, _), (rk, _)| lk.cmp(rk));
     v.into()
 }
 
-impl<A: Display, B: Display> Display for PrintableVec<(A,B)> {
+impl<A: Display, B: Display> Display for PrintableVec<(A, B)> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{{")?;
+        write!(f, "{{")?;
         for item in &self.0 {
             write!(f, "{}:{} ", item.0, item.1)?;
         }
-        write!(f,"}}")
+        write!(f, "}}")
     }
 }
 
