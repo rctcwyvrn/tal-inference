@@ -299,7 +299,7 @@ impl Checker {
         let mut unifier =
             Unifier::new(self.constraints.clone(), self.satisfy.clone(), self.cur_var);
 
-        unifier.try_unify()?;
+        unifier.unify()?;
         unifier.chase_all_to_root();
 
         println!("--- Mapping --- ");
@@ -318,7 +318,7 @@ impl Checker {
         self.pretty_heap_w_mapping(&mapping);
 
         // unify the jumps to labelled blocks
-        unifier.try_satisfy()?;
+        unifier.satisfy()?;
 
         Ok(())
     }

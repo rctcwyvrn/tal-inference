@@ -73,23 +73,23 @@ impl Unifier {
                 }
             }
             (None, Some(rhs_rho)) => {
-                let expect = self.subtract(l_set, r_set)?;
+                let expect = self.unify_subtract(l_set, r_set)?;
                 self.unify_rho(rhs_rho, expect)?
             }
             (Some(lhs_rho), None) => {
-                let expect = self.subtract(r_set, l_set)?;
+                let expect = self.unify_subtract(r_set, l_set)?;
                 self.unify_rho(lhs_rho, expect)?
             }
             (Some(lhs_rho), Some(r_known)) if self.rho_mappings.contains_key(&r_known.0) => {
                 let r_rho = self.rho_mappings[&r_known.0].clone();
-                let rhs = self.add(r_set, r_rho)?;
-                let expect = self.subtract(rhs, l_set)?;
+                let rhs = Unifier::add(r_set, r_rho)?;
+                let expect = self.unify_subtract(rhs, l_set)?;
                 self.unify_rho(lhs_rho, expect)?
             }
             (Some(l_known), Some(rhs_rho)) if self.rho_mappings.contains_key(&l_known.0) => {
                 let l_rho = self.rho_mappings[&l_known.0].clone();
-                let lhs = self.add(l_set, l_rho)?;
-                let expect = self.subtract(lhs, r_set)?;
+                let lhs = Unifier::add(l_set, l_rho)?;
+                let expect = self.unify_subtract(lhs, r_set)?;
                 self.unify_rho(rhs_rho, expect)?
             }
             _ => {
@@ -107,7 +107,7 @@ impl Unifier {
             .collect()
     }
 
-    fn add(&mut self, set: RhoMapping, rho: RhoMapping) -> Result<RhoMapping, TypeError> {
+    fn add(set: RhoMapping, rho: RhoMapping) -> Result<RhoMapping, TypeError> {
         println!(
             "(~) Computing X + Y for X = {} | Y = {}",
             sort_for_print(&set),
@@ -126,7 +126,26 @@ impl Unifier {
         Ok(result)
     }
 
-    fn subtract(&mut self, l_set: RhoMapping, r_set: RhoMapping) -> Result<RhoMapping, TypeError> {
+    fn unify_rho_entries(&mut self, l: RhoEntry, r: RhoEntry) -> Result<(), TypeError> {
+        match (l, r) {
+            // both contain a type
+            (RhoEntry::Contains(t1), RhoEntry::Contains(t2)) => {
+                self.constrain(t1, t2);
+                Ok(())
+            }
+            // both don't contain a type
+            (RhoEntry::Absent, RhoEntry::Absent) => Ok(()),
+            // conflict
+            // todo: does this ever happen???
+            _ => return Err(TypeError::RhoConflict),
+        }
+    }
+
+    fn unify_subtract(
+        &mut self,
+        l_set: RhoMapping,
+        r_set: RhoMapping,
+    ) -> Result<RhoMapping, TypeError> {
         println!(
             "(~) Computing X - Y for X = {} | Y = {}",
             sort_for_print(&l_set),
@@ -136,15 +155,7 @@ impl Unifier {
         for idx in r_set.keys() {
             if result.contains_key(idx) {
                 result.remove(idx);
-                match (l_set[idx].clone(), r_set[idx].clone()) {
-                    // both contain a type
-                    (RhoEntry::Contains(t1), RhoEntry::Contains(t2)) => self.constrain(t1, t2),
-                    // both don't contain a type
-                    (RhoEntry::Absent, RhoEntry::Absent) => continue,
-                    // conflict
-                    // todo: does this ever happen???
-                    _ => return Err(TypeError::RhoConflict),
-                }
+                self.unify_rho_entries(l_set[idx].clone(), r_set[idx].clone())?;
             } else {
                 // different sets of keys
                 return Err(TypeError::RhoTooSmall);
@@ -163,9 +174,14 @@ impl Unifier {
                 sort_for_print(&set),
                 sort_for_print(&self.rho_mappings[&rho_id])
             );
-            // check that they exactly match
-            if set != self.rho_mappings[&rho_id] {
-                return Err(TypeError::RhoConflict);
+            // constrain that they exactly match
+            let rho = self.rho_mappings[&rho_id].clone();
+            for key in rho.keys() {
+                if set.contains_key(key) {
+                    self.unify_rho_entries(set[key].clone(), rho[key].clone())?;
+                } else {
+                    return Err(TypeError::RhoConflict);
+                }
             }
         } else {
             println!("- new rho({:?}) {}", rho_id, sort_for_print(&set));
@@ -174,7 +190,7 @@ impl Unifier {
         Ok(())
     }
 
-    pub fn try_unify(&mut self) -> Result<(), TypeError> {
+    pub fn unify(&mut self) -> Result<(), TypeError> {
         println!("\n--- starting unify ---");
 
         while !self.constraints.is_empty() {
@@ -215,7 +231,89 @@ impl Unifier {
         Ok(())
     }
 
-    fn try_satisfy_jump(
+    fn satisfy_rho(
+        &mut self,
+        eqs: &mut VecDeque<(Ty, Ty)>,
+        additional_rhos: &mut HashMap<usize, HashMap<i64, RhoEntry>>,
+        l_set: HashMap<i64, Ty>,
+        l_rho: Option<Rho>,
+        r_set: HashMap<i64, Ty>,
+        r_rho_id: Option<Rho>,
+    ) -> Result<(), TypeError> {
+        println!(
+            "\n(++) Attempting to substitute ({:?}, {:?}) for ({:?}, {:?})",
+            l_set, l_rho, r_set, r_rho_id
+        );
+
+        // Convert the input l_rho into a concrete mapping
+        let l_rho = if let Some(id) = l_rho {
+            if self.rho_mappings.contains_key(&id.0) {
+                self.rho_mappings[&id.0].clone()
+            } else {
+                // make no assumptions about an unbound l_rho
+                HashMap::new()
+            }
+        } else {
+            // no l_rho
+            HashMap::new()
+        };
+
+        let lhs = Unifier::add(l_rho, Unifier::convert(l_set))?;
+        let r_rho_bound = if let Some(id) = r_rho_id {
+            self.rho_mappings.contains_key(&id.0)
+        } else {
+            true
+        };
+
+        if r_rho_bound {
+            // case: right rho is bound
+            // check that l_set + l_rho = r_set + r_rho
+            let r_rho = if let Some(id) = r_rho_id {
+                self.rho_mappings[&id.0].clone()
+            } else {
+                HashMap::new()
+            };
+            let rhs = Unifier::add(r_rho, Unifier::convert(r_set))?;
+            if lhs != rhs {
+                return Err(TypeError::FailedJumpOnRho);
+            }
+        } else {
+            // case: right rho is not bound
+            // check that l_set + l_rho <: r_set
+            let rhs = Unifier::convert(r_set);
+            println!(
+                "(++) solving for rho {} <: {} + rho({})",
+                sort_for_print(&lhs),
+                sort_for_print(&rhs),
+                r_rho_id.unwrap().0
+            );
+            for key in rhs.keys() {
+                if !lhs.contains_key(key) {
+                    return Err(TypeError::FailedJumpOnRho);
+                }
+                match (lhs[key].clone(), rhs[key].clone()) {
+                    (RhoEntry::Contains(l), RhoEntry::Contains(r)) => eqs.push_back((l, r)),
+                    (RhoEntry::Absent, RhoEntry::Absent) => continue,
+                    (RhoEntry::Contains(_), RhoEntry::Absent)
+                    | (RhoEntry::Absent, RhoEntry::Contains(_)) => {
+                        return Err(TypeError::FailedJumpOnRho)
+                    }
+                }
+            }
+            let mut rho_ty = HashMap::new();
+            for key in lhs.keys() {
+                if !rhs.contains_key(key) {
+                    rho_ty.insert(*key, lhs[key].clone());
+                }
+            }
+            // todo: do we need to store the rho somewhere?
+            // is it possible to have multiple rhos referring to each other in the signature???
+            additional_rhos.insert(r_rho_id.unwrap().0, rho_ty);
+        }
+        Ok(())
+    }
+
+    fn satisfy_jump(
         &mut self,
         jump: VecDeque<(Ty, Ty)>,
     ) -> Result<(HashMap<usize, Ty>, HashMap<usize, RhoMapping>), TypeError> {
@@ -250,76 +348,7 @@ impl Unifier {
                 (Ty::UniqPtr(l_set, l_rho), Ty::UniqPtr(r_set, r_rho))
                 | (Ty::UniqPtr(l_set, l_rho), Ty::Ptr(r_set, r_rho))
                 | (Ty::Ptr(l_set, l_rho), Ty::Ptr(r_set, r_rho)) => {
-                    println!(
-                        "(++) Attempting to substitute ({:?}, {:?}) for ({:?}, {:?})",
-                        l_set, l_rho, r_set, r_rho
-                    );
-
-                    // Convert the input l_rho into a concrete mapping
-                    let l_rho = if let Some(id) = l_rho {
-                        if self.rho_mappings.contains_key(&id.0) {
-                            self.rho_mappings[&id.0].clone()
-                        } else {
-                            // make no assumptions about an unbound l_rho
-                            HashMap::new()
-                        }
-                    } else {
-                        // no l_rho
-                        HashMap::new()
-                    };
-                    let lhs = self.add(l_rho, Unifier::convert(l_set))?;
-
-                    let r_rho_bound = if let Some(id) = r_rho {
-                        self.rho_mappings.contains_key(&id.0)
-                    } else {
-                        true
-                    };
-                    if r_rho_bound {
-                        // case: right rho is bound
-                        // check that l_set + l_rho = r_set + r_rho
-                        let r_rho = if let Some(id) = r_rho {
-                            self.rho_mappings[&id.0].clone()
-                        } else {
-                            HashMap::new()
-                        };
-                        let rhs = self.add(r_rho, Unifier::convert(r_set))?;
-                        if lhs != rhs {
-                            return Err(TypeError::FailedJumpOnRho);
-                        }
-                    } else {
-                        // case: right rho is not bound
-                        // check that l_set + l_rho <: r_set
-                        let rhs = Unifier::convert(r_set);
-                        println!(
-                            "(++) try_satisfy_rho {} <: {}",
-                            sort_for_print(&lhs),
-                            sort_for_print(&rhs)
-                        );
-                        for key in rhs.keys() {
-                            if !lhs.contains_key(key) {
-                                return Err(TypeError::FailedJumpOnRho);
-                            }
-                            match (lhs[key].clone(), rhs[key].clone()) {
-                                (RhoEntry::Contains(l), RhoEntry::Contains(r)) => {
-                                    eqs.push_back((l, r))
-                                }
-                                (RhoEntry::Absent, RhoEntry::Absent) => continue,
-                                (RhoEntry::Contains(_), RhoEntry::Absent)
-                                | (RhoEntry::Absent, RhoEntry::Contains(_)) => {
-                                    return Err(TypeError::FailedJumpOnRho)
-                                }
-                            }
-                        }
-                        let mut rho_ty = HashMap::new();
-                        for key in lhs.keys() {
-                            if !rhs.contains_key(key) {
-                                rho_ty.insert(*key, lhs[key].clone());
-                            }
-                        }
-                        // todo: do we need to store the rho somewhere?
-                        // is it possible to have multiple rhos referring to each other in the signature???
-                        additional_rhos.insert(r_rho.unwrap().0, rho_ty);
-                    }
+                    self.satisfy_rho(&mut eqs, &mut additional_rhos, l_set, l_rho, r_set, r_rho)?;
                 }
                 _ => {
                     println!("> Failed satisfy_jump on: {} = {}", next.0, next.1);
@@ -330,7 +359,7 @@ impl Unifier {
         Ok((mapping, additional_rhos))
     }
 
-    pub fn try_satisfy(&mut self) -> Result<(), TypeError> {
+    pub fn satisfy(&mut self) -> Result<(), TypeError> {
         println!("--- Satisfying jumps ---");
         println!("(The parameter we're trying to pass it <: what the function is expecting)");
         for jump in self.satisfy.clone() {
@@ -339,7 +368,7 @@ impl Unifier {
                 println!("{:?} <: {:?}", lhs, rhs);
             }
 
-            let (mapping, rho_mappings) = self.try_satisfy_jump(jump.into())?;
+            let (mapping, rho_mappings) = self.satisfy_jump(jump.into())?;
 
             // debugging
             print!("typevars: [");
