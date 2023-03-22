@@ -1,4 +1,4 @@
-use crate::syntax::*;
+use crate::{syntax::*, debug::sort_for_print};
 use crate::unify::Unifier;
 
 use core::panic;
@@ -305,6 +305,11 @@ impl Checker {
         let mapping = unifier.mapping.clone();
         for v in 1..=self.cur_var {
             println!("- unifVar({}) => {}", v, mapping[&v]);
+        }
+
+        println!("--- Rho mappings --- ");
+        for (rho, mapping) in unifier.rho_mappings.clone() {
+            println!("- rho({}) => {}", rho, sort_for_print(&mapping));
         }
 
         // debugging

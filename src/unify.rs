@@ -60,7 +60,7 @@ impl Unifier {
         r_rho: Option<Rho>,
     ) -> Result<(), TypeError> {
         println!(
-            "[+] Unifying pointers ({},{:?}) = ({},{:?})",
+            "\n[+] Unifying pointers ({},{:?}) = ({},{:?})",
             sort_for_print(&l_set), l_rho, 
             sort_for_print(&r_set), r_rho
         );
@@ -96,6 +96,7 @@ impl Unifier {
                 panic!("I think this is unreachable? When would this happen?")
             }
         }
+        println!("---");
         Ok(())
     }
 
@@ -107,7 +108,7 @@ impl Unifier {
     }
 
     fn add(&mut self, set: RhoMapping, rho: RhoMapping) -> Result<RhoMapping, TypeError> {
-        println!("(~) Computing {} + {}", sort_for_print(&set), sort_for_print(&rho));
+        println!("(~) Computing X + Y for X = {} | Y = {}", sort_for_print(&set), sort_for_print(&rho));
         let mut result = set.clone();
         for idx in rho.keys() {
             if !result.contains_key(idx) {
@@ -117,12 +118,12 @@ impl Unifier {
                 return Err(TypeError::RhoFailedAdd);
             }
         }
-        println!("(~) {} + {} = {}", sort_for_print(&set), sort_for_print(&rho), sort_for_print(&result));
+        println!("(~) X + Y = {}", sort_for_print(&result));
         Ok(result)
     }
 
     fn subtract(&mut self, l_set: RhoMapping, r_set: RhoMapping) -> Result<RhoMapping, TypeError> {
-        println!("(~) Computing {} - {}", sort_for_print(&l_set), sort_for_print(&r_set));
+        println!("(~) Computing X - Y for X = {} | Y = {}", sort_for_print(&l_set), sort_for_print(&r_set));
         let mut result = l_set.clone();
         for idx in r_set.keys() {
             if result.contains_key(idx) {
@@ -133,6 +134,7 @@ impl Unifier {
                     // both don't contain a type
                     (RhoEntry::Absent, RhoEntry::Absent) => continue,
                     // conflict
+                    // todo: does this ever happen???
                     _ => return Err(TypeError::RhoConflict),
                 }
             } else {
@@ -140,7 +142,7 @@ impl Unifier {
                 return Err(TypeError::RhoTooSmall);
             }
         }
-        println!("(~) {} - {} = {}", sort_for_print(&l_set), sort_for_print(&r_set), sort_for_print(&result));
+        println!("(~) X - Y = {}", sort_for_print(&result));
         Ok(result)
     }
 
@@ -165,7 +167,7 @@ impl Unifier {
     }
 
     pub fn try_unify(&mut self) -> Result<(), TypeError> {
-        println!("--- starting unify ---");
+        println!("\n--- starting unify ---");
 
         while !self.constraints.is_empty() {
             let next = self.constraints.pop_front().unwrap();
@@ -238,6 +240,9 @@ impl Unifier {
                         eqs.push((fn_b[&r].clone(), fn_a[&r].clone()));
                     }
                 }
+                // insert case for ptrs
+                // https://ahnfelt.medium.com/row-polymorphism-crash-course-587f1e7b7c47
+                // do the switcheroo to attempt to solve for the rhos
                 _ => {
                     println!("> Failed satisfy_jump on: {} = {}", next.0, next.1);
                     return Err(TypeError::FailedJump);
@@ -248,21 +253,11 @@ impl Unifier {
     }
 
     pub fn try_satisfy(&mut self) -> Result<(), TypeError> {
-        println!("The parameter we're trying to pass it <: what the function is expecting");
+        println!("--- Satisfying jumps ---");
+        println!("(The parameter we're trying to pass it <: what the function is expecting)");
         for jump in &self.satisfy {
-            let jump: Vec<(Ty, Ty)> = jump
-                .iter()
-                .map(|(lhs, rhs)| {
-                    (
-                        self.chase_to_root(lhs.clone()),
-                        self.chase_to_root(rhs.clone()),
-                    )
-                })
-                .collect();
-
             // debugging
-            println!("---");
-            for (lhs, rhs) in &jump {
+            for (lhs, rhs) in jump {
                 println!("{:?} <: {:?}", lhs, rhs);
             }
 
@@ -274,6 +269,7 @@ impl Unifier {
                 print!("TyVar({})={:?}, ", lhs, rhs)
             }
             println!("]");
+            println!("---");
         }
         Ok(())
     }
@@ -281,28 +277,33 @@ impl Unifier {
     // returns a non unifVar type, either lifting it to a typevar or finding it within the mapping
     pub fn chase_to_root(&self, ty: Ty) -> Ty {
         let mut var = ty;
-        loop {
-            match var {
-                Ty::TyVar(_) => break,
-                Ty::Int => break,
-                Ty::Code(f) => {
-                    let mut roots = HashMap::new();
-                    for r in 1..=MAX_REGISTER {
-                        roots.insert(r, self.chase_to_root(f[&r].clone()));
-                    }
-                    var = Ty::Code(roots);
-                    break;
+        match &var {
+            Ty::TyVar(_) => (),
+            Ty::Int => (),
+            Ty::Code(f) => {
+                let mut roots = HashMap::new();
+                for r in 1..=MAX_REGISTER {
+                    roots.insert(r, self.chase_to_root(f[&r].clone()));
                 }
-                Ty::UnifVar(v) => {
-                    if self.mapping.contains_key(&v) {
-                        var = self.mapping[&v].clone();
-                    } else {
-                        var = Ty::TyVar(v);
-                        break;
-                    }
+                var = Ty::Code(roots);
+            }
+            Ty::UnifVar(v) => {
+                if self.mapping.contains_key(&v) {
+                    var = self.chase_to_root(self.mapping[&v].clone());
+                } else {
+                    var = Ty::TyVar(v.clone());
                 }
-                Ty::Ptr(_, _) => todo!(),
-                Ty::UniqPtr(_, _) => todo!(),
+            }
+            Ty::Ptr(set, rho) | Ty::UniqPtr(set, rho) => {
+                let mut roots = HashMap::new();
+                for idx in set.keys() {
+                    roots.insert(*idx, self.chase_to_root(set[idx].clone())); 
+                }
+                var = match &var {
+                    Ty::Ptr(_, _) => Ty::Ptr(roots, rho.clone()),
+                    Ty::UniqPtr(_, _) => Ty::UniqPtr(roots, rho.clone()),
+                    _ => panic!("unreachable")
+                }
             }
         }
         var
@@ -310,6 +311,7 @@ impl Unifier {
 
     // mutably close this unifiers mapping
     pub fn chase_all_to_root(&mut self) {
+        // Close all unifvars
         for v in 1..=self.variables {
             if self.mapping.contains_key(&v) {
                 let ty = self.chase_to_root(self.mapping[&v].clone());
@@ -318,6 +320,36 @@ impl Unifier {
                 self.mapping.insert(v, Ty::TyVar(v));
             }
         }
+
+        // Close all the rhos
+        let mut new_rho_mappings = HashMap::new();
+        for rho_id in self.rho_mappings.keys() {
+            let mut new_mapping = self.rho_mappings.get(rho_id).unwrap().clone();
+            for (idx, entry) in &self.rho_mappings[rho_id] {
+                if let RhoEntry::Contains(ty) = entry {
+                    let closed = self.chase_to_root(ty.clone());
+                    new_mapping.insert(*idx, RhoEntry::Contains(closed));
+                }
+            }
+            new_rho_mappings.insert(*rho_id, new_mapping);
+        }
+        self.rho_mappings = new_rho_mappings;
+
+        // Close everything in satisfy
+        let mut new_satisfy = Vec::new();
+        for jump in &self.satisfy {
+            let closed_jump: Vec<(Ty, Ty)> = jump
+                .iter()
+                .map(|(lhs, rhs)| {
+                    (
+                        self.chase_to_root(lhs.clone()),
+                        self.chase_to_root(rhs.clone()),
+                    )
+                })
+                .collect();
+            new_satisfy.push(closed_jump);
+        }
+        self.satisfy = new_satisfy.into();
     }
 
     pub fn new(

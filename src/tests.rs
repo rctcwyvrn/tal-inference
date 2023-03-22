@@ -364,6 +364,7 @@ pub fn poly_heap() -> Program {
         (
             "store".to_owned(),
             vec![
+                // can be called with r1 as any uniqptr with index 1 set
                 Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
                 Instruction::StoreStrong(1, 1, 3),
             ],
