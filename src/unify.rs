@@ -203,28 +203,17 @@ impl Unifier {
         Ok(())
     }
 
-    fn try_satisfy_jump(jump: Vec<(Ty, Ty)>) -> Result<HashMap<usize, Ty>, TypeError> {
+    fn try_satisfy_jump(&mut self, jump: VecDeque<(Ty, Ty)>) -> Result<(HashMap<usize, Ty>, HashMap<usize, RhoMapping>), TypeError> {
         let mut mapping = HashMap::new();
-        let mut substitute = |v: &mut Vec<(Ty, Ty)>, x, t: Ty| {
-            mapping.insert(x, t.clone());
-            v.iter_mut().for_each(|(lhs, rhs)| {
-                if *lhs == Ty::TyVar(x) {
-                    *lhs = t.clone();
-                }
-                if *rhs == Ty::TyVar(x) {
-                    *rhs = t.clone();
-                }
-            });
-        };
-
+        let mut additional_rhos = HashMap::new();
         let mut eqs = jump;
         while !eqs.is_empty() {
-            let next = eqs.pop().unwrap();
+            let next = eqs.pop_front().unwrap();
             match next {
                 // types match, done
                 (s, t) if s == t => {}
                 // function expects a generic parameter, so we can freely substitute
-                (t, Ty::TyVar(x)) => substitute(&mut eqs, x, t),
+                (t, Ty::TyVar(x)) => Unifier::substitute(&mut mapping, &mut eqs, Ty::TyVar(x), t),
                 // function expects a label, we have a label
                 (Ty::Code(fn_a), Ty::Code(fn_b)) => {
                     // the block we're jumping to is able to call a function of type fn_b
@@ -237,38 +226,97 @@ impl Unifier {
                     for r in 1..=MAX_REGISTER {
                         // eqs.push((fn_a[&r].clone(), fn_b[&r].clone()));
                         // I THINK
-                        eqs.push((fn_b[&r].clone(), fn_a[&r].clone()));
+                        eqs.push_back((fn_b[&r].clone(), fn_a[&r].clone()));
                     }
                 }
                 // insert case for ptrs
                 // https://ahnfelt.medium.com/row-polymorphism-crash-course-587f1e7b7c47
                 // do the switcheroo to attempt to solve for the rhos
+                (Ty::UniqPtr(l_set, l_rho), Ty::UniqPtr(r_set, r_rho))
+                | (Ty::UniqPtr(l_set, l_rho), Ty::Ptr(r_set, r_rho))
+                | (Ty::Ptr(l_set, l_rho), Ty::Ptr(r_set, r_rho)) => {
+                    println!("(++) Attempting to substitute ({:?}, {:?}) for ({:?}, {:?})", l_set, l_rho, r_set, r_rho);
+                    
+                    // Convert the input l_rho into a concrete mapping
+                    let l_rho = if let Some(id) = l_rho { 
+                        if self.rho_mappings.contains_key(&id.0) { 
+                            self.rho_mappings[&id.0].clone()
+                        } else {
+                            // make no assumptions about an unbound l_rho
+                            HashMap::new()
+                        } 
+                    } else { 
+                        // no l_rho
+                        HashMap::new() 
+                    };
+                    let lhs = self.add(l_rho, Unifier::convert(l_set))?; 
+
+                    let r_rho_bound = if let Some(id) = r_rho { self.rho_mappings.contains_key(&id.0) } else { true };
+                    if r_rho_bound {
+                        // case: right rho is bound
+                        // check that l_set + l_rho = r_set + r_rho
+                        let r_rho = if let Some(id) = r_rho { self.rho_mappings[&id.0].clone() } else { HashMap::new() };
+                        let rhs = self.add(r_rho, Unifier::convert(r_set))?;
+                        if lhs != rhs {
+                            return Err(TypeError::FailedJumpOnRho);
+                        }
+                    } else {
+                        // case: right rho is not bound
+                        // check that l_set + l_rho <: r_set
+                        let rhs = Unifier::convert(r_set);
+                        println!("(++) try_satisfy_rho {} <: {}", sort_for_print(&lhs), sort_for_print(&rhs));
+                        for key in rhs.keys() {
+                            if !lhs.contains_key(key) { return Err(TypeError::FailedJumpOnRho) }
+                            match (lhs[key].clone(), rhs[key].clone()) {
+                                (RhoEntry::Contains(l), RhoEntry::Contains(r)) => eqs.push_back((l,r)),
+                                (RhoEntry::Absent, RhoEntry::Absent) => continue,
+                                (RhoEntry::Contains(_), RhoEntry::Absent) | (RhoEntry::Absent, RhoEntry::Contains(_)) => return Err(TypeError::FailedJumpOnRho),
+                            }
+                        }
+                        let mut rho_ty = HashMap::new();
+                        for key in lhs.keys() {
+                            if !rhs.contains_key(key) {
+                                rho_ty.insert(*key, lhs[key].clone());
+                            }
+                        }
+                        // todo: do we need to store the rho somewhere?
+                        // is it possible to have multiple rhos referring to each other in the signature???
+                        additional_rhos.insert(r_rho.unwrap().0, rho_ty);
+                    }
+                }
                 _ => {
                     println!("> Failed satisfy_jump on: {} = {}", next.0, next.1);
                     return Err(TypeError::FailedJump);
                 }
             }
         }
-        Ok(mapping)
+        Ok((mapping, additional_rhos))
     }
 
     pub fn try_satisfy(&mut self) -> Result<(), TypeError> {
         println!("--- Satisfying jumps ---");
         println!("(The parameter we're trying to pass it <: what the function is expecting)");
-        for jump in &self.satisfy {
+        for jump in self.satisfy.clone() {
             // debugging
-            for (lhs, rhs) in jump {
+            for (lhs, rhs) in &jump {
                 println!("{:?} <: {:?}", lhs, rhs);
             }
 
-            let mapping = Unifier::try_satisfy_jump(jump.clone())?;
+            let (mapping, rho_mappings) = self.try_satisfy_jump(jump.into())?;
 
             // debugging
-            print!("[");
+            print!("typevars: [");
             for (lhs, rhs) in mapping.iter() {
                 print!("TyVar({})={:?}, ", lhs, rhs)
             }
             println!("]");
+
+            print!("rhos: [");
+            for rho_id in rho_mappings.keys() {
+                print!("rho({})={}, ", rho_id, sort_for_print(&rho_mappings[rho_id]))
+            }
+            println!("]");
+            
             println!("---");
         }
         Ok(())

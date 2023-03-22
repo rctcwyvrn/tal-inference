@@ -47,6 +47,9 @@ pub enum TypeError {
 
     #[error("failed to constrain jump")]
     FailedJump,
+    
+    #[error("failed to constrain rhos for jump")]
+    FailedJumpOnRho,
 
     #[error("failed to unify")]
     FailedUnify,
