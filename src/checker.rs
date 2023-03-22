@@ -2,7 +2,7 @@ use crate::unify::Unifier;
 use crate::{debug::sort_for_print, syntax::*};
 
 use core::panic;
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap};
 use thiserror::Error;
 
 pub const MAX_REGISTER: usize = 3;
@@ -144,11 +144,11 @@ impl Checker {
             let ty = self.register_types[&r].clone();
             match ty {
                 // if we have a concrete type, we can constrain the input type of the function we're jumping to
-                Ty::Int => {
-                    // we could say that the parameter type is a type variable
-                    // but that becomes intractable (??), this appears to work
-                    success &= self.constrain(&code_ty[&r], &ty);
-                }
+                // Ty::Int => {
+                //     // we could say that the parameter type is a type variable
+                //     // but that becomes intractable (??), this appears to work
+                //     success &= self.constrain(&code_ty[&r], &ty);
+                // }
                 // otherwise we have to check that it can be satisfied
                 _ => {
                     println!(

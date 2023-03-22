@@ -373,6 +373,57 @@ pub fn poly_heap() -> Program {
     ]
 }
 
+pub fn poly_heap_2() -> Program {
+    vec![
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+                Instruction::Malloc(1, 5),
+                // shove a bunch of other random stuff in
+                Instruction::StoreStrong(1, 0, 3),
+                Instruction::StoreStrong(1, 0, 3),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("store".to_owned()))),
+        ),
+        (
+            "store".to_owned(),
+            vec![
+                // can be called with r1 as any uniqptr with index 1 set
+                Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+                Instruction::StoreStrong(1, 1, 3),
+            ],
+            Terminal::Halt,
+        ),
+    ]
+}
+
+pub fn poly_heap_3() -> Program {
+    vec![
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+                // small malloc
+                Instruction::Malloc(1, 1),
+                // shove a bunch of other random stuff in
+                Instruction::StoreStrong(1, 0, 3),
+                Instruction::StoreStrong(1, 0, 3),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("store".to_owned()))),
+        ),
+        (
+            "store".to_owned(),
+            vec![
+                // cant be called with the small malloc
+                Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+                Instruction::StoreStrong(1, 1, 3),
+            ],
+            Terminal::Halt,
+        ),
+    ]
+}
+
 pub fn full_suite() -> Vec<Program> {
     vec![
         make_add_program(),
@@ -386,5 +437,7 @@ pub fn full_suite() -> Vec<Program> {
         ptr_information_loss_1(),
         ptr_information_loss_2(),
         poly_heap(),
+        poly_heap_2(),
+        poly_heap_3(),
     ]
 }

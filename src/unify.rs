@@ -33,6 +33,7 @@ impl Unifier {
         variable: Ty,
         substitute: Ty,
     ) {
+        println!("> Substituting {} = {}", variable, substitute);
         let id = match variable {
             Ty::UnifVar(x) => x,
             Ty::TyVar(x) => x,
@@ -68,31 +69,31 @@ impl Unifier {
         let r_set = Unifier::convert(r_set);
         match (l_rho, r_rho) {
             (None, None) => {
-                if l_set != r_set {
-                    return Err(TypeError::PtrConflict);
-                }
+                self.unify_rho_mappings(l_set, r_set)?;
             }
             (None, Some(rhs_rho)) => {
                 let expect = self.unify_subtract(l_set, r_set)?;
-                self.unify_rho(rhs_rho, expect)?
+                self.unify_rho_id_with_mapping(rhs_rho, expect)?
             }
             (Some(lhs_rho), None) => {
                 let expect = self.unify_subtract(r_set, l_set)?;
-                self.unify_rho(lhs_rho, expect)?
+                self.unify_rho_id_with_mapping(lhs_rho, expect)?
             }
             (Some(lhs_rho), Some(r_known)) if self.rho_mappings.contains_key(&r_known.0) => {
                 let r_rho = self.rho_mappings[&r_known.0].clone();
                 let rhs = Unifier::add(r_set, r_rho)?;
                 let expect = self.unify_subtract(rhs, l_set)?;
-                self.unify_rho(lhs_rho, expect)?
+                self.unify_rho_id_with_mapping(lhs_rho, expect)?
             }
             (Some(l_known), Some(rhs_rho)) if self.rho_mappings.contains_key(&l_known.0) => {
                 let l_rho = self.rho_mappings[&l_known.0].clone();
                 let lhs = Unifier::add(l_set, l_rho)?;
                 let expect = self.unify_subtract(lhs, r_set)?;
-                self.unify_rho(rhs_rho, expect)?
+                self.unify_rho_id_with_mapping(rhs_rho, expect)?
             }
             _ => {
+                // todo: this is where i have to do the switcheroo i think
+                // but that never happens for tal i think? 
                 panic!("I think this is unreachable? When would this happen?")
             }
         }
@@ -124,6 +125,17 @@ impl Unifier {
         }
         println!("(~) X + Y = {}", sort_for_print(&result));
         Ok(result)
+    }
+
+    fn unify_rho_mappings(&mut self, l: RhoMapping, r: RhoMapping) -> Result<(), TypeError> {
+        for key in l.keys() {
+            if r.contains_key(key) {
+                self.unify_rho_entries(l[key].clone(), r[key].clone())?;
+            } else {
+                return Err(TypeError::RhoConflict);
+            }
+        }
+        Ok(())
     }
 
     fn unify_rho_entries(&mut self, l: RhoEntry, r: RhoEntry) -> Result<(), TypeError> {
@@ -165,7 +177,7 @@ impl Unifier {
         Ok(result)
     }
 
-    fn unify_rho(&mut self, rho: Rho, set: RhoMapping) -> Result<(), TypeError> {
+    fn unify_rho_id_with_mapping(&mut self, rho: Rho, set: RhoMapping) -> Result<(), TypeError> {
         let rho_id = rho.0;
         if self.rho_mappings.contains_key(&rho_id) {
             println!(
@@ -176,13 +188,7 @@ impl Unifier {
             );
             // constrain that they exactly match
             let rho = self.rho_mappings[&rho_id].clone();
-            for key in rho.keys() {
-                if set.contains_key(key) {
-                    self.unify_rho_entries(set[key].clone(), rho[key].clone())?;
-                } else {
-                    return Err(TypeError::RhoConflict);
-                }
-            }
+            self.unify_rho_mappings(rho, set)?;
         } else {
             println!("- new rho({:?}) {}", rho_id, sort_for_print(&set));
             self.rho_mappings.insert(rho_id, set);
@@ -361,7 +367,8 @@ impl Unifier {
 
     pub fn satisfy(&mut self) -> Result<(), TypeError> {
         println!("--- Satisfying jumps ---");
-        println!("(The parameter we're trying to pass it <: what the function is expecting)");
+        // Reminder:
+        // The parameter we're trying to pass it <: what the function is expecting 
         for jump in self.satisfy.clone() {
             // debugging
             for (lhs, rhs) in &jump {

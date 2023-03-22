@@ -4,7 +4,12 @@
   - falling into the "- rho({:?}) requirements match? {} = {}", case
   - commit
   - all the weird subtyping cases
+  - line 147 of checker
 
+- cleanup state management in satisfy
+  - set and reset state between jumps
+  - or create subunifiers
+- try to cleanup satisfy vs unify in general
 
 notes
 https://www.ccs.neu.edu/home/wand/papers/wand-lics-87.pdf
