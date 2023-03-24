@@ -256,6 +256,62 @@ pub fn invalid_ind_jump_requirements() -> Program {
     ]
 }
 
+pub fn ind_jump_weird() -> Program {
+    vec![
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+                Instruction::BranchNonZero(1, Value::Word(WordValue::Label("does_nothing".to_owned()))),
+                Instruction::Malloc(1, 1),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("does_nothing".to_owned()))),
+        ),
+        (
+            "does_nothing".to_owned(),
+            vec![],
+            Terminal::Halt,
+        ), 
+    ]
+    // vec![
+    //     (
+    //         "entry".to_owned(),
+    //         vec![
+    //             Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+    //             Instruction::BranchNonZero(1, Value::Word(WordValue::Label("case2".to_owned()))),
+    //             Instruction::Mov(2, Value::Word(WordValue::Label("doA".to_owned()))),
+    //         ],
+    //         Terminal::Jump(Value::Word(WordValue::Label("go".to_owned()))),
+    //     ),
+    //     (
+    //         "case2".to_owned(),
+    //         vec![
+    //             Instruction::Mov(2, Value::Word(WordValue::Label("doB".to_owned()))),
+    //         ],
+    //         Terminal::Jump(Value::Word(WordValue::Label("go".to_owned()))),
+    //     ), 
+
+    //     (
+    //         "go".to_owned(),
+    //         vec![
+    //             Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+    //             Instruction::Mov(3, Value::Word(WordValue::Integer(1))),
+    //         ],
+    //         Terminal::Jump(Value::Register(2)),
+    //     ),
+    //     (
+    //         "doA".to_owned(),
+    //         vec![Instruction::Arith(Op::Add, 1, 1, Value::Register(3))],
+    //         Terminal::Halt,
+    //     ),
+    //     (
+    //         "doB".to_owned(),
+    //         vec![Instruction::Arith(Op::Sub, 1, 1, Value::Register(3))],
+    //         Terminal::Halt,
+    //     ),
+    // ]
+}
+
 pub fn invalid_conflicting_typevars_1() -> Program {
     vec![
         (

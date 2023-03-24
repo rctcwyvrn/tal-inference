@@ -1,0 +1,6 @@
+we cant typecheck situations where
+- all calls to an indirect jumper set a certain register beforehand
+- indirect jumper can then accept labels that require that certain register set 
+
+the issue is that we're conservative with what we know before each jump
+- we assume nothing

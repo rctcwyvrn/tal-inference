@@ -129,6 +129,12 @@ impl Checker {
     }
 
     fn constrain_jump(&mut self, val: Value) -> Result<(), TypeError> {
+        let is_indirect = match &val {
+            Value::Register(_) => true,
+            Value::Word(WordValue::Label(_)) => false,
+            _ => panic!("too lazy for proper error")
+        };
+
         let val_ty = self.infer_value(val);
         let code_ty = self.init_code_type();
 
@@ -144,11 +150,12 @@ impl Checker {
             let ty = self.register_types[&r].clone();
             match ty {
                 // if we have a concrete type, we can constrain the input type of the function we're jumping to
-                // Ty::Int => {
-                //     // we could say that the parameter type is a type variable
-                //     // but that becomes intractable (??), this appears to work
-                //     success &= self.constrain(&code_ty[&r], &ty);
-                // }
+                // the goal is to build up as much known information as we can
+                Ty::Int | Ty::Ptr(_, _) | Ty::UniqPtr(_, _) if is_indirect => {
+                    // we could say that the parameter type is a type variable
+                    // but that becomes intractable (??), this appears to work
+                    success &= self.constrain(&code_ty[&r], &ty);
+                }
                 // otherwise we have to check that it can be satisfied
                 _ => {
                     println!(
@@ -158,6 +165,7 @@ impl Checker {
                     jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
                 }
             }
+            jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
         }
 
         self.satisfy.push(jump_satisfy);

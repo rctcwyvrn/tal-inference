@@ -12,8 +12,9 @@ fn main() {
     // let prog = make_int_program();
     // let prog = make_jump_program();
     // let prog = make_indirect_jump_program();
+    let prog = ind_jump_weird();
     // let prog = make_invalid_indirect_jump_program();
-    let prog = ind_jump_forgetting();
+    // let prog = ind_jump_forgetting();
     // let prog = invalid_ind_jump_requirements();
     // let prog = invalid_conflicting_typevars_1();
 
