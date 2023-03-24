@@ -60,3 +60,36 @@ vec![
 
 temporary fix:
 - bound indirect jumps, but not direct jumps (lmao)
+
+# another case
+
+case 1 indirect jump
+
+indirect jump, takes a code in r1
+sets r2
+jumps to r1
+
+want:
+- we want to accept functions that either require r2 or dont
+- so r1 should have the most generic type, which is the one with Code<r2: int>
+- we want to constrain the code type in the jump
+
+case 2 direct jump
+
+sets r2
+jumps to label
+
+want:
+- we want to check if we can legally jump to the label
+- so that the label either requires r2 or doesnt require anything
+- we don't want to constrain the code type in the jump because that enforces a precondition on the label
+  - but i guess thats what the let poly is for???
+
+# let poly??
+
+let poly -> create a copy of a label type, add a secondary set of constraints that the new label will match the original later
+
+the issue is that we _still_ cant always constrain jumps
+- indirect jumps will still create infinite recursive types
+
+how to fix??
