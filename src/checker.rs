@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 pub const MAX_REGISTER: usize = 3;
-type CodeTy = HashMap<Register, Ty>;
+pub type CodeTy = HashMap<Register, Ty>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Ty {
@@ -32,9 +32,8 @@ pub struct Checker {
     pub register_types: HashMap<Register, Ty>,
 
     // global context
-    pub heap_types: HashMap<Label, Ty>,
+    pub label_types: HashMap<Label, (CodeTy, Vec<CodeTy>)>,
     pub constraints: Vec<(Ty, Ty)>,
-    pub satisfy: Vec<Vec<(Ty, Ty)>>,
 }
 
 #[derive(Debug, Error)]
@@ -109,12 +108,20 @@ impl Checker {
         }
     }
 
+    fn let_poly(&mut self, label: &String) -> Ty {
+        let new_code = self.init_code_type();
+        if let Some((_, let_polys)) = self.label_types.get_mut(label) {
+            let_polys.push(new_code.clone())
+        }
+        Ty::Code(new_code)
+    }
+
     fn infer_value(&mut self, val: Value) -> Ty {
         match &val {
             Value::Register(r) => self.register_types[r].clone(),
             Value::Word(wv) => match wv {
                 WordValue::Integer(_) => Ty::Int,
-                WordValue::Label(l) => self.heap_types[l].clone(),
+                WordValue::Label(l) => self.let_poly(l),
             },
         }
     }
@@ -141,34 +148,26 @@ impl Checker {
         // constrain the value that we're jumping to to be a code type
         let mut success = self.constrain(&val_ty, &Ty::Code(code_ty.clone()));
 
-        // note: we could update the register (if val is a register) to be the code type
-        // which would reduce unifications a little, probably doesnt matter
-
-        // constrain the parameters of th code type to be supertypes of what our current registers are
-        let mut jump_satisfy = Vec::new();
+        // Increase the set of functions we can legally jump to by inserting information about what the current registers hold
         for r in 1..=MAX_REGISTER {
             let ty = self.register_types[&r].clone();
             match ty {
                 // if we have a concrete type, we can constrain the input type of the function we're jumping to
                 // the goal is to build up as much known information as we can
-                Ty::Int | Ty::Ptr(_, _) | Ty::UniqPtr(_, _) if is_indirect => {
+                Ty::Int | Ty::Ptr(_, _) | Ty::UniqPtr(_, _) => {
                     // we could say that the parameter type is a type variable
                     // but that becomes intractable (??), this appears to work
                     success &= self.constrain(&code_ty[&r], &ty);
                 }
-                // otherwise we have to check that it can be satisfied
-                _ => {
-                    println!(
-                        "- Adding jump satisfy for r_{} ({} <: {})",
-                        r, self.register_types[&r], code_ty[&r]
-                    );
-                    jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
+                // bind code in every case except indirect jumps
+                // temporary fix to get around infinite recursive types
+                Ty::Code(_) if !is_indirect => {
+                    success &= self.constrain(&code_ty[&r], &ty);
                 }
+                // otherwise we have to check that it can be satisfied
+                _ => println!("Skipping constraining {} to register value {}", code_ty[&r], ty)
             }
-            jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
         }
-
-        self.satisfy.push(jump_satisfy);
 
         if success {
             Ok(())
@@ -262,16 +261,12 @@ impl Checker {
     }
 
     fn check_block(&mut self, block: &Block) -> Result<(), TypeError> {
-        let ty = self.heap_types[&block.0].clone();
-        if let Ty::Code(gamma) = ty {
-            self.register_types = gamma;
-            for instr in &block.1 {
-                self.check_instruction(instr.clone())?;
-            }
-            self.check_terminal(block.2.clone())
-        } else {
-            panic!("Huh??")
+        let gamma = self.label_types[&block.0].0.clone();
+        self.register_types = gamma;
+        for instr in &block.1 {
+            self.check_instruction(instr.clone())?;
         }
+        self.check_terminal(block.2.clone())
     }
 
     fn init_code_type(&mut self) -> CodeTy {
@@ -282,12 +277,36 @@ impl Checker {
         ty
     }
 
+    fn lift_to_typevars(&self, mut unifier: &mut Unifier, ty: Ty) {
+        match ty {
+            Ty::Int => return,
+            Ty::Code(f) => {
+                println!("lifting {}", sort_for_print(&f));
+                for r in 1..=MAX_REGISTER {
+                    self.lift_to_typevars(&mut unifier, f[&r].clone());
+                }
+            }
+            Ty::UnifVar(v) => {
+                if !unifier.mapping.contains_key(&v) {
+                    println!("lifting function parameter unifvar {} to typevar", v);
+                    unifier.mapping.insert(v, Ty::TyVar(v));
+                } else {
+                    let ty = unifier.mapping[&v].clone();
+                    self.lift_to_typevars(&mut unifier, ty);
+                }
+            }
+            Ty::TyVar(_) => panic!("how did we already get typevars"),
+            Ty::Ptr(_, _) | Ty::UniqPtr(_, _) => panic!("future lily problem"),
+        }
+    }
+
     pub fn check(&mut self, program: Program) -> Result<(), TypeError> {
         // compute free registers in each block
         // create label types for each block
         for (label, _, _) in &program {
-            let ty = Ty::Code(self.init_code_type());
-            self.heap_types.insert(label.clone(), ty);
+            let label_type = self.init_code_type();
+            let let_poly_label_types = Vec::new();
+            self.label_types.insert(label.clone(), (label_type, let_poly_label_types));
         }
 
         self.pretty_heap();
@@ -303,30 +322,46 @@ impl Checker {
             println!("- {} = {}", c.0, c.1);
         }
 
+        let let_poly_constraints = self.label_types.clone().into_values().collect();
         // unify the variables in the block bodies
         let mut unifier =
-            Unifier::new(self.constraints.clone(), self.satisfy.clone(), self.cur_var);
+            Unifier::new(self.constraints.clone(), let_poly_constraints, self.cur_var);
 
         unifier.unify()?;
-        unifier.chase_all_to_root();
+        // lift to typevariables
+        for (_, (base, _)) in &self.label_types {
+            for r in 1..=MAX_REGISTER {
+                self.lift_to_typevars(&mut unifier, base[&r].clone());
+            }
+        } 
 
         println!("--- Mapping --- ");
         let mapping = unifier.mapping.clone();
         for v in 1..=self.cur_var {
-            println!("- unifVar({}) => {}", v, mapping[&v]);
+            println!("- unifVar({}) => {:?}", v, mapping.get(&v));
+        }
+        self.pretty_heap_w_mapping(&mapping);
+
+        // self.pretty_heap_w_mapping(&unifier.mapping);
+
+        // unify the jumps to labelled blocks
+        unifier.check_let_poly()?;
+
+        unifier.close_mapping();
+
+        // debugging
+        println!("--- Mapping --- ");
+        let mapping = unifier.mapping.clone();
+        for v in 1..=self.cur_var {
+            println!("- unifVar({}) => {:?}", v, mapping[&v]);
         }
 
         println!("--- Rho mappings --- ");
         for (rho, mapping) in unifier.rho_mappings.clone() {
             println!("- rho({}) => {}", rho, sort_for_print(&mapping));
         }
-
-        // debugging
-        self.pretty_heap();
         self.pretty_heap_w_mapping(&mapping);
 
-        // unify the jumps to labelled blocks
-        unifier.satisfy()?;
 
         Ok(())
     }
@@ -336,9 +371,8 @@ impl Checker {
             cur_rho: 0,
             cur_var: 0,
             register_types: HashMap::new(),
-            heap_types: HashMap::new(),
+            label_types: HashMap::new(),
             constraints: Vec::new(),
-            satisfy: Vec::new(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use core::panic;
-use std::collections::{HashMap, VecDeque};
+use std::{collections::{HashMap, VecDeque}, char::MAX};
 
 use crate::{checker::*, debug::sort_for_print};
 
@@ -13,7 +13,7 @@ pub type RhoMapping = HashMap<i64, RhoEntry>;
 
 pub struct Unifier {
     constraints: VecDeque<(Ty, Ty)>,
-    satisfy: VecDeque<Vec<(Ty, Ty)>>,
+    lp_constraints: Vec<(CodeTy, Vec<CodeTy>)>,
     variables: usize,
     pub mapping: HashMap<usize, Ty>,
     pub rho_mappings: HashMap<usize, RhoMapping>,
@@ -203,12 +203,26 @@ impl Unifier {
             let next = self.constraints.pop_front().unwrap();
             match next {
                 (s, t) if s == t => {}
+                // asldkfjasldfjlsakdfjklsdf
+                // extra cases for the let-poly nonsense
+                // typevar initialization
+                // UHHHHHH??? IDK IF THIS WORKS 
+                (Ty::TyVar(x), t) => {
+                    println!("[!!] initializing TyVar({}) = {} in this let-poly", x, t);
+                    Unifier::substitute(&mut self.mapping, &mut self.constraints, Ty::UnifVar(x), t)
+                }
+
                 (t, Ty::UnifVar(x)) | (Ty::UnifVar(x), t) => {
+                    if self.mapping.contains_key(&x) {
+                        panic!("LILY YOU FUCKED UP -> this unifvar should have been added to the mapping and chased");
+                    }
                     Unifier::substitute(&mut self.mapping, &mut self.constraints, Ty::UnifVar(x), t)
                 }
                 (Ty::Code(fn_a), Ty::Code(fn_b)) => {
                     for r in 1..=MAX_REGISTER {
-                        self.constrain(fn_a[&r].clone(), fn_b[&r].clone());
+                        // self.constrain(fn_a[&r].clone(), fn_b[&r].clone());
+                        // WARNING: SCUFFED
+                        self.constrain(fn_b[&r].clone(), fn_a[&r].clone());
                     }
                 }
 
@@ -237,192 +251,68 @@ impl Unifier {
         Ok(())
     }
 
-    fn satisfy_rho(
-        &mut self,
-        eqs: &mut VecDeque<(Ty, Ty)>,
-        additional_rhos: &mut HashMap<usize, HashMap<i64, RhoEntry>>,
-        l_set: HashMap<i64, Ty>,
-        l_rho: Option<Rho>,
-        r_set: HashMap<i64, Ty>,
-        r_rho_id: Option<Rho>,
-    ) -> Result<(), TypeError> {
-        println!(
-            "\n(++) Attempting to substitute ({:?}, {:?}) for ({:?}, {:?})",
-            l_set, l_rho, r_set, r_rho_id
-        );
-
-        // Convert the input l_rho into a concrete mapping
-        let l_rho = if let Some(id) = l_rho {
-            if self.rho_mappings.contains_key(&id.0) {
-                self.rho_mappings[&id.0].clone()
-            } else {
-                // make no assumptions about an unbound l_rho
-                HashMap::new()
-            }
-        } else {
-            // no l_rho
-            HashMap::new()
-        };
-
-        let lhs = Unifier::add(l_rho, Unifier::convert(l_set))?;
-        let r_rho_bound = if let Some(id) = r_rho_id {
-            self.rho_mappings.contains_key(&id.0)
-        } else {
-            true
-        };
-
-        if r_rho_bound {
-            // case: right rho is bound
-            // check that l_set + l_rho = r_set + r_rho
-            let r_rho = if let Some(id) = r_rho_id {
-                self.rho_mappings[&id.0].clone()
-            } else {
-                HashMap::new()
-            };
-            let rhs = Unifier::add(r_rho, Unifier::convert(r_set))?;
-            if lhs != rhs {
-                return Err(TypeError::FailedJumpOnRho);
-            }
-        } else {
-            // case: right rho is not bound
-            // check that l_set + l_rho <: r_set
-            let rhs = Unifier::convert(r_set);
-            println!(
-                "(++) solving for rho {} <: {} + rho({})",
-                sort_for_print(&lhs),
-                sort_for_print(&rhs),
-                r_rho_id.unwrap().0
-            );
-            for key in rhs.keys() {
-                if !lhs.contains_key(key) {
-                    return Err(TypeError::FailedJumpOnRho);
+    pub fn check_let_poly(&mut self) -> Result<(), TypeError> {
+        for (base, polys) in &self.lp_constraints {
+            for poly in polys {
+                println!("[??] Doing let poly {} = {}", sort_for_print(base), sort_for_print(&poly));
+                let mut constraints = Vec::new();
+                for r in 1..=MAX_REGISTER {
+                    // let lhs = self.close_type(base[&r].clone());
+                    // let closed = self.close_type(poly[&r].clone());
+                    // let rhs = match &closed{
+                    //     Ty::TyVar(v) => Ty::UnifVar(*v),
+                    //     _ => closed,
+                    // };
+                    let lhs = self.chase_type(base[&r].clone());
+                    let rhs = self.chase_type(poly[&r].clone());
+                    constraints.push((lhs, rhs))
                 }
-                match (lhs[key].clone(), rhs[key].clone()) {
-                    (RhoEntry::Contains(l), RhoEntry::Contains(r)) => eqs.push_back((l, r)),
-                    (RhoEntry::Absent, RhoEntry::Absent) => continue,
-                    (RhoEntry::Contains(_), RhoEntry::Absent)
-                    | (RhoEntry::Absent, RhoEntry::Contains(_)) => {
-                        return Err(TypeError::FailedJumpOnRho)
+
+                println!("[??] Starting nested unifier {:?}", constraints);
+                let mut nested = Unifier { 
+                    constraints: constraints.into(),
+                    // empty
+                    lp_constraints: Vec::new(),
+                    variables: self.variables,
+                    mapping: self.mapping.clone(),
+                    rho_mappings: self.rho_mappings.clone(),
+                };
+                nested.unify()?;
+
+                for (var, ty) in &nested.mapping {
+                    if !self.mapping.contains_key(var) {
+                        println!("[??] Updating {} = {}", var, ty);
+                        self.mapping.insert(*var, ty.clone());
                     }
                 }
+                println!("[??] done")
             }
-            let mut rho_ty = HashMap::new();
-            for key in lhs.keys() {
-                if !rhs.contains_key(key) {
-                    rho_ty.insert(*key, lhs[key].clone());
-                }
-            }
-            // todo: do we need to store the rho somewhere?
-            // is it possible to have multiple rhos referring to each other in the signature???
-            additional_rhos.insert(r_rho_id.unwrap().0, rho_ty);
         }
         Ok(())
     }
 
-    fn satisfy_jump(
-        &mut self,
-        jump: VecDeque<(Ty, Ty)>,
-    ) -> Result<(HashMap<usize, Ty>, HashMap<usize, RhoMapping>), TypeError> {
-        let mut mapping = HashMap::new();
-        let mut additional_rhos = HashMap::new();
-        let mut eqs = jump;
-        while !eqs.is_empty() {
-            let next = eqs.pop_front().unwrap();
-            match next {
-                // types match, done
-                (s, t) if s == t => {}
-                // function expects a generic parameter, so we can freely substitute
-                (t, Ty::TyVar(x)) => Unifier::substitute(&mut mapping, &mut eqs, Ty::TyVar(x), t),
-                // function expects a label, we have a label
-                (Ty::Code(fn_a), Ty::Code(fn_b)) => {
-                    // the block we're jumping to is able to call a function of type fn_b
-                    // in order to substitute fn_a in fn_b's place, what do we require?
-                    // - if fn_b's r_k is concrete
-                    //   then if fn_a's r_k is a type variable or is the same concrete type, we can call it
-                    // - if fn_b's r_k is generic
-                    //   then we can't assume anything about the contents of r_k before fn_a would be called
-                    //     so fn_a's r_k must be a type variable
-                    for r in 1..=MAX_REGISTER {
-                        // eqs.push((fn_a[&r].clone(), fn_b[&r].clone()));
-                        // I THINK
-                        eqs.push_back((fn_b[&r].clone(), fn_a[&r].clone()));
-                    }
-                }
-                // insert case for ptrs
-                // https://ahnfelt.medium.com/row-polymorphism-crash-course-587f1e7b7c47
-                // do the switcheroo to attempt to solve for the rhos
-                (Ty::UniqPtr(l_set, l_rho), Ty::UniqPtr(r_set, r_rho))
-                | (Ty::UniqPtr(l_set, l_rho), Ty::Ptr(r_set, r_rho))
-                | (Ty::Ptr(l_set, l_rho), Ty::Ptr(r_set, r_rho)) => {
-                    self.satisfy_rho(&mut eqs, &mut additional_rhos, l_set, l_rho, r_set, r_rho)?;
-                }
-                _ => {
-                    println!("> Failed satisfy_jump on: {} = {}", next.0, next.1);
-                    return Err(TypeError::FailedJump);
-                }
-            }
-        }
-        Ok((mapping, additional_rhos))
-    }
-
-    pub fn satisfy(&mut self) -> Result<(), TypeError> {
-        println!("--- Satisfying jumps ---");
-        // Reminder:
-        // The parameter we're trying to pass it <: what the function is expecting
-        for jump in self.satisfy.clone() {
-            // debugging
-            for (lhs, rhs) in &jump {
-                println!("{:?} <: {:?}", lhs, rhs);
-            }
-
-            let (mapping, rho_mappings) = self.satisfy_jump(jump.into())?;
-
-            // debugging
-            print!("typevars: [");
-            for (lhs, rhs) in mapping.iter() {
-                print!("TyVar({})={:?}, ", lhs, rhs)
-            }
-            println!("]");
-
-            print!("rhos: [");
-            for rho_id in rho_mappings.keys() {
-                print!(
-                    "rho({})={}, ",
-                    rho_id,
-                    sort_for_print(&rho_mappings[rho_id])
-                )
-            }
-            println!("]");
-
-            println!("---");
-        }
-        Ok(())
-    }
-
-    // returns a non unifVar type, either lifting it to a typevar or finding it within the mapping
-    pub fn chase_to_root(&self, ty: Ty) -> Ty {
-        let mut var = ty;
+    // chase the given type under the current mapping
+    pub fn chase_type(&self, ty: Ty) -> Ty {
+        let mut var = ty.clone();
         match &var {
             Ty::TyVar(_) => (),
             Ty::Int => (),
             Ty::Code(f) => {
                 let mut roots = HashMap::new();
                 for r in 1..=MAX_REGISTER {
-                    roots.insert(r, self.chase_to_root(f[&r].clone()));
+                    roots.insert(r, self.chase_type(f[&r].clone()));
                 }
                 var = Ty::Code(roots);
             }
             Ty::UnifVar(v) => {
                 if self.mapping.contains_key(&v) {
-                    var = self.chase_to_root(self.mapping[&v].clone());
-                } else {
-                    var = Ty::TyVar(v.clone());
-                }
+                    var = self.chase_type(self.mapping[&v].clone());
+                } 
             }
             Ty::Ptr(set, rho) | Ty::UniqPtr(set, rho) => {
                 let mut roots = HashMap::new();
                 for idx in set.keys() {
-                    roots.insert(*idx, self.chase_to_root(set[idx].clone()));
+                    roots.insert(*idx, self.chase_type(set[idx].clone()));
                 }
                 var = match &var {
                     Ty::Ptr(_, _) => Ty::Ptr(roots, rho.clone()),
@@ -431,18 +321,19 @@ impl Unifier {
                 }
             }
         }
+        println!("(+) Chased {} to {}", ty, var);
         var
     }
 
     // mutably close this unifiers mapping
-    pub fn chase_all_to_root(&mut self) {
+    pub fn close_mapping(&mut self) {
         // Close all unifvars
         for v in 1..=self.variables {
             if self.mapping.contains_key(&v) {
-                let ty = self.chase_to_root(self.mapping[&v].clone());
+                let ty = self.chase_type(self.mapping[&v].clone());
                 self.mapping.insert(v, ty);
             } else {
-                self.mapping.insert(v, Ty::TyVar(v));
+                panic!("future lily will figure this out");
             }
         }
 
@@ -452,39 +343,38 @@ impl Unifier {
             let mut new_mapping = self.rho_mappings.get(rho_id).unwrap().clone();
             for (idx, entry) in &self.rho_mappings[rho_id] {
                 if let RhoEntry::Contains(ty) = entry {
-                    let closed = self.chase_to_root(ty.clone());
+                    let closed = self.chase_type(ty.clone());
                     new_mapping.insert(*idx, RhoEntry::Contains(closed));
                 }
             }
             new_rho_mappings.insert(*rho_id, new_mapping);
         }
         self.rho_mappings = new_rho_mappings;
+    }
 
-        // Close everything in satisfy
-        let mut new_satisfy = Vec::new();
-        for jump in &self.satisfy {
-            let closed_jump: Vec<(Ty, Ty)> = jump
-                .iter()
-                .map(|(lhs, rhs)| {
-                    (
-                        self.chase_to_root(lhs.clone()),
-                        self.chase_to_root(rhs.clone()),
-                    )
-                })
-                .collect();
-            new_satisfy.push(closed_jump);
+    fn get_free(lp_constraints: &Vec<(CodeTy, Vec<CodeTy>)>) -> Vec<usize> {
+        let mut frees = Vec::new();
+        for (_, polys) in lp_constraints {
+            for poly in polys {
+                for r in 1..=MAX_REGISTER {
+                    if let Ty::UnifVar(v) = poly[&r] {
+                        frees.push(v);
+                    }
+                }
+            } 
         }
-        self.satisfy = new_satisfy.into();
+        println!("Frees {:?}", frees);
+        frees
     }
 
     pub fn new(
         constraints: Vec<(Ty, Ty)>,
-        satisfy: Vec<Vec<(Ty, Ty)>>,
+        lp_constraints: Vec<(CodeTy, Vec<CodeTy>)>,
         variables: usize,
     ) -> Unifier {
         Unifier {
             constraints: constraints.into(),
-            satisfy: satisfy.into(),
+            lp_constraints: lp_constraints.into(),
             variables,
             mapping: HashMap::new(),
             rho_mappings: HashMap::new(),

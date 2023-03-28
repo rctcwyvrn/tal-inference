@@ -1,0 +1,332 @@
+--- Heap ---
+Original: doB => 
+  1: UnifVar(13)
+  2: UnifVar(14)
+  3: UnifVar(15)
+  Polymorphic cases (jank): 
+Original: doA => 
+  1: UnifVar(10)
+  2: UnifVar(11)
+  3: UnifVar(12)
+  Polymorphic cases (jank): 
+Original: entry => 
+  1: UnifVar(1)
+  2: UnifVar(2)
+  3: UnifVar(3)
+  Polymorphic cases (jank): 
+Original: case2 => 
+  1: UnifVar(4)
+  2: UnifVar(5)
+  3: UnifVar(6)
+  Polymorphic cases (jank): 
+Original: go => 
+  1: UnifVar(7)
+  2: UnifVar(8)
+  3: UnifVar(9)
+  Polymorphic cases (jank): 
+
+[+] Checking Mov(1, Word(Integer(1)))
+> Updating r1 to Int
+
+[+] Checking BranchNonZero(1, Word(Label("case2")))
+> Constraining Int == Int
+> Constraining Code({1:UnifVar(16) 2:UnifVar(17) 3:UnifVar(18) }) == Code({1:UnifVar(19) 2:UnifVar(20) 3:UnifVar(21) })
+> Constraining UnifVar(19) == Int
+Skipping constraining UnifVar(20) to register value UnifVar(2)
+Skipping constraining UnifVar(21) to register value UnifVar(3)
+
+[+] Checking Mov(2, Word(Label("doA")))
+> Updating r2 to Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+
+[+] Checking Jump(Word(Label("go")))
+> Constraining Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) }) == Code({1:UnifVar(28) 2:UnifVar(29) 3:UnifVar(30) })
+> Constraining UnifVar(28) == Int
+> Constraining UnifVar(29) == Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+Skipping constraining UnifVar(30) to register value UnifVar(3)
+
+[+] Checking Mov(2, Word(Label("doB")))
+> Updating r2 to Code({1:UnifVar(31) 2:UnifVar(32) 3:UnifVar(33) })
+
+[+] Checking Jump(Word(Label("go")))
+> Constraining Code({1:UnifVar(34) 2:UnifVar(35) 3:UnifVar(36) }) == Code({1:UnifVar(37) 2:UnifVar(38) 3:UnifVar(39) })
+Skipping constraining UnifVar(37) to register value UnifVar(4)
+> Constraining UnifVar(38) == Code({1:UnifVar(31) 2:UnifVar(32) 3:UnifVar(33) })
+Skipping constraining UnifVar(39) to register value UnifVar(6)
+
+[+] Checking Mov(1, Word(Integer(1)))
+> Updating r1 to Int
+
+[+] Checking Mov(3, Word(Integer(1)))
+> Updating r3 to Int
+
+[+] Checking Jump(Register(2))
+> Constraining UnifVar(8) == Code({1:UnifVar(40) 2:UnifVar(41) 3:UnifVar(42) })
+> Constraining UnifVar(40) == Int
+Skipping constraining UnifVar(41) to register value UnifVar(8)
+> Constraining UnifVar(42) == Int
+
+[+] Checking Arith(Add, 1, 1, Register(2))
+> Constraining UnifVar(10) == Int
+> Constraining UnifVar(11) == Int
+> Updating r1 to Int
+
+[+] Checking Halt
+
+[+] Checking Arith(Sub, 1, 1, Register(3))
+> Constraining UnifVar(13) == Int
+> Constraining UnifVar(15) == Int
+> Updating r1 to Int
+
+[+] Checking Halt
+--- Constraints --- 
+- Code({1:UnifVar(16) 2:UnifVar(17) 3:UnifVar(18) }) = Code({1:UnifVar(19) 2:UnifVar(20) 3:UnifVar(21) })
+- UnifVar(19) = Int
+- Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) }) = Code({1:UnifVar(28) 2:UnifVar(29) 3:UnifVar(30) })
+- UnifVar(28) = Int
+- UnifVar(29) = Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+- Code({1:UnifVar(34) 2:UnifVar(35) 3:UnifVar(36) }) = Code({1:UnifVar(37) 2:UnifVar(38) 3:UnifVar(39) })
+- UnifVar(38) = Code({1:UnifVar(31) 2:UnifVar(32) 3:UnifVar(33) })
+- UnifVar(8) = Code({1:UnifVar(40) 2:UnifVar(41) 3:UnifVar(42) })
+- UnifVar(40) = Int
+- UnifVar(42) = Int
+- UnifVar(10) = Int
+- UnifVar(11) = Int
+- UnifVar(13) = Int
+- UnifVar(15) = Int
+
+--- starting unify ---
+> Constraining UnifVar(19) = UnifVar(16)
+> Constraining UnifVar(20) = UnifVar(17)
+> Constraining UnifVar(21) = UnifVar(18)
+> Substituting UnifVar(19) = Int
+> Constraining UnifVar(28) = UnifVar(25)
+> Constraining UnifVar(29) = UnifVar(26)
+> Constraining UnifVar(30) = UnifVar(27)
+> Substituting UnifVar(28) = Int
+> Substituting UnifVar(29) = Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+> Constraining UnifVar(37) = UnifVar(34)
+> Constraining UnifVar(38) = UnifVar(35)
+> Constraining UnifVar(39) = UnifVar(36)
+> Substituting UnifVar(38) = Code({1:UnifVar(31) 2:UnifVar(32) 3:UnifVar(33) })
+> Substituting UnifVar(8) = Code({1:UnifVar(40) 2:UnifVar(41) 3:UnifVar(42) })
+> Substituting UnifVar(40) = Int
+> Substituting UnifVar(42) = Int
+> Substituting UnifVar(10) = Int
+> Substituting UnifVar(11) = Int
+> Substituting UnifVar(13) = Int
+> Substituting UnifVar(15) = Int
+> Substituting UnifVar(16) = Int
+> Substituting UnifVar(17) = UnifVar(20)
+> Substituting UnifVar(18) = UnifVar(21)
+> Substituting UnifVar(25) = Int
+> Substituting UnifVar(26) = Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+> Substituting UnifVar(27) = UnifVar(30)
+> Substituting UnifVar(34) = UnifVar(37)
+> Substituting UnifVar(35) = Code({1:UnifVar(31) 2:UnifVar(32) 3:UnifVar(33) })
+> Substituting UnifVar(36) = UnifVar(39)
+--- rhos --- 
+lifting function parameter unifvar 14 to typevar
+lifting function parameter unifvar 12 to typevar
+lifting function parameter unifvar 1 to typevar
+lifting function parameter unifvar 2 to typevar
+lifting function parameter unifvar 3 to typevar
+lifting function parameter unifvar 4 to typevar
+lifting function parameter unifvar 5 to typevar
+lifting function parameter unifvar 6 to typevar
+lifting function parameter unifvar 7 to typevar
+lifting {1:UnifVar(40) 2:UnifVar(41) 3:UnifVar(42) }
+lifting function parameter unifvar 41 to typevar
+lifting function parameter unifvar 9 to typevar
+--- Mapping --- 
+- unifVar(1) => Some(TyVar(1))
+- unifVar(2) => Some(TyVar(2))
+- unifVar(3) => Some(TyVar(3))
+- unifVar(4) => Some(TyVar(4))
+- unifVar(5) => Some(TyVar(5))
+- unifVar(6) => Some(TyVar(6))
+- unifVar(7) => Some(TyVar(7))
+- unifVar(8) => Some(Code({1: UnifVar(40), 2: UnifVar(41), 3: UnifVar(42)}))
+- unifVar(9) => Some(TyVar(9))
+- unifVar(10) => Some(Int)
+- unifVar(11) => Some(Int)
+- unifVar(12) => Some(TyVar(12))
+- unifVar(13) => Some(Int)
+- unifVar(14) => Some(TyVar(14))
+- unifVar(15) => Some(Int)
+- unifVar(16) => Some(Int)
+- unifVar(17) => Some(UnifVar(20))
+- unifVar(18) => Some(UnifVar(21))
+- unifVar(19) => Some(Int)
+- unifVar(20) => None
+- unifVar(21) => None
+- unifVar(22) => None
+- unifVar(23) => None
+- unifVar(24) => None
+- unifVar(25) => Some(Int)
+- unifVar(26) => Some(Code({3: UnifVar(24), 2: UnifVar(23), 1: UnifVar(22)}))
+- unifVar(27) => Some(UnifVar(30))
+- unifVar(28) => Some(Int)
+- unifVar(29) => Some(Code({3: UnifVar(24), 2: UnifVar(23), 1: UnifVar(22)}))
+- unifVar(30) => None
+- unifVar(31) => None
+- unifVar(32) => None
+- unifVar(33) => None
+- unifVar(34) => Some(UnifVar(37))
+- unifVar(35) => Some(Code({1: UnifVar(31), 2: UnifVar(32), 3: UnifVar(33)}))
+- unifVar(36) => Some(UnifVar(39))
+- unifVar(37) => None
+- unifVar(38) => Some(Code({1: UnifVar(31), 2: UnifVar(32), 3: UnifVar(33)}))
+- unifVar(39) => None
+- unifVar(40) => Some(Int)
+- unifVar(41) => Some(TyVar(41))
+- unifVar(42) => Some(Int)
+--- Heap w/ mapping ---
+Original: doB => 
+  1: Int
+  2: TyVar(14)
+  3: Int
+  Polymorphic cases (jank): 
+  ---
+    1: UnifVar(31)
+    2: UnifVar(32)
+    3: UnifVar(33)
+Original: doA => 
+  1: Int
+  2: Int
+  3: TyVar(12)
+  Polymorphic cases (jank): 
+  ---
+    1: UnifVar(22)
+    2: UnifVar(23) // doA requires an int, so 23 is bound to an int
+    3: UnifVar(24)
+Original: entry => 
+  1: TyVar(1)
+  2: TyVar(2)
+  3: TyVar(3)
+  Polymorphic cases (jank): 
+Original: case2 => 
+  1: TyVar(4)
+  2: TyVar(5)
+  3: TyVar(6)
+  Polymorphic cases (jank): 
+  ---
+    1: Int
+    2: UnifVar(20)
+    3: UnifVar(21)
+Original: go => 
+  1: TyVar(7)
+  2: Code({1: UnifVar(40), 2: UnifVar(41), 3: UnifVar(42)})
+  3: TyVar(9)
+  Polymorphic cases (jank): 
+  ---
+    1: Int
+    2: Code({3: UnifVar(24), 2: UnifVar(23), 1: UnifVar(22)})
+    3: UnifVar(30)
+  ---
+    1: UnifVar(37)
+    2: Code({1: UnifVar(31), 2: UnifVar(32), 3: UnifVar(33)})
+    3: UnifVar(39)
+[??] Doing let poly {1:UnifVar(13) 2:UnifVar(14) 3:UnifVar(15) } = {1:UnifVar(31) 2:UnifVar(32) 3:UnifVar(33) }
+(+) Chased Int to Int
+(+) Chased UnifVar(13) to Int
+(+) Chased UnifVar(31) to UnifVar(31)
+(+) Chased TyVar(14) to TyVar(14)
+(+) Chased UnifVar(14) to TyVar(14)
+(+) Chased UnifVar(32) to UnifVar(32)
+(+) Chased Int to Int
+(+) Chased UnifVar(15) to Int
+(+) Chased UnifVar(33) to UnifVar(33)
+[??] Starting nested unifier [(Int, UnifVar(31)), (TyVar(14), UnifVar(32)), (Int, UnifVar(33))]
+
+--- starting unify ---
+> Substituting UnifVar(31) = Int
+[!!] initializing TyVar(14) = UnifVar(32) in this let-poly
+> Substituting UnifVar(14) = UnifVar(32)
+> Substituting UnifVar(33) = Int
+--- rhos --- 
+[??] Updating 33 = Int
+[??] Updating 31 = Int
+[??] done
+[??] Doing let poly {1:UnifVar(10) 2:UnifVar(11) 3:UnifVar(12) } = {1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) }
+(+) Chased Int to Int
+(+) Chased UnifVar(10) to Int
+(+) Chased UnifVar(22) to UnifVar(22)
+(+) Chased Int to Int
+(+) Chased UnifVar(11) to Int
+(+) Chased UnifVar(23) to UnifVar(23)
+(+) Chased TyVar(12) to TyVar(12)
+(+) Chased UnifVar(12) to TyVar(12)
+(+) Chased UnifVar(24) to UnifVar(24)
+[??] Starting nested unifier [(Int, UnifVar(22)), (Int, UnifVar(23)), (TyVar(12), UnifVar(24))]
+
+--- starting unify ---
+> Substituting UnifVar(22) = Int
+> Substituting UnifVar(23) = Int
+[!!] initializing TyVar(12) = UnifVar(24) in this let-poly
+> Substituting UnifVar(12) = UnifVar(24)
+--- rhos --- 
+[??] Updating 23 = Int // 23 is correctly bound
+[??] Updating 22 = Int
+[??] done
+[??] Doing let poly {1:UnifVar(4) 2:UnifVar(5) 3:UnifVar(6) } = {1:UnifVar(16) 2:UnifVar(17) 3:UnifVar(18) }
+(+) Chased TyVar(4) to TyVar(4)
+(+) Chased UnifVar(4) to TyVar(4)
+(+) Chased Int to Int
+(+) Chased UnifVar(16) to Int
+(+) Chased TyVar(5) to TyVar(5)
+(+) Chased UnifVar(5) to TyVar(5)
+(+) Chased UnifVar(20) to UnifVar(20)
+(+) Chased UnifVar(17) to UnifVar(20)
+(+) Chased TyVar(6) to TyVar(6)
+(+) Chased UnifVar(6) to TyVar(6)
+(+) Chased UnifVar(21) to UnifVar(21)
+(+) Chased UnifVar(18) to UnifVar(21)
+[??] Starting nested unifier [(TyVar(4), Int), (TyVar(5), UnifVar(20)), (TyVar(6), UnifVar(21))]
+
+--- starting unify ---
+[!!] initializing TyVar(4) = Int in this let-poly
+> Substituting UnifVar(4) = Int
+[!!] initializing TyVar(5) = UnifVar(20) in this let-poly
+> Substituting UnifVar(5) = UnifVar(20)
+[!!] initializing TyVar(6) = UnifVar(21) in this let-poly
+> Substituting UnifVar(6) = UnifVar(21)
+--- rhos --- 
+[??] done
+[??] Doing let poly {1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) } = {1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) }
+(+) Chased TyVar(7) to TyVar(7)
+(+) Chased UnifVar(7) to TyVar(7)
+(+) Chased Int to Int
+(+) Chased UnifVar(25) to Int
+(+) Chased Int to Int
+(+) Chased UnifVar(40) to Int
+(+) Chased TyVar(41) to TyVar(41)
+(+) Chased UnifVar(41) to TyVar(41)
+(+) Chased Int to Int
+(+) Chased UnifVar(42) to Int
+(+) Chased Code({1:UnifVar(40) 2:UnifVar(41) 3:UnifVar(42) }) to Code({1:Int 2:TyVar(41) 3:Int })
+(+) Chased UnifVar(8) to Code({1:Int 2:TyVar(41) 3:Int })
+(+) Chased Int to Int
+(+) Chased UnifVar(22) to Int
+(+) Chased Int to Int
+(+) Chased UnifVar(23) to Int
+(+) Chased UnifVar(24) to UnifVar(24)
+(+) Chased Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) }) to Code({1:Int 2:Int 3:UnifVar(24) })
+(+) Chased UnifVar(26) to Code({1:Int 2:Int 3:UnifVar(24) })
+(+) Chased TyVar(9) to TyVar(9)
+(+) Chased UnifVar(9) to TyVar(9)
+(+) Chased UnifVar(30) to UnifVar(30)
+(+) Chased UnifVar(27) to UnifVar(30)
+// so because 23 -> int
+// we're trying to pass in a code that requires an int in r2 when we expect a \forall t41 code(r2: t41)
+[??] Starting nested unifier [(TyVar(7), Int), (Code({2: TyVar(41), 3: Int, 1: Int}), Code({1: Int, 2: Int, 3: UnifVar(24)})), (TyVar(9), UnifVar(30))]
+
+--- starting unify ---
+[!!] initializing TyVar(7) = Int in this let-poly
+> Substituting UnifVar(7) = Int
+> Constraining Int = Int
+> Constraining Int = TyVar(41)
+> Constraining UnifVar(24) = Int
+[!!] initializing TyVar(9) = UnifVar(30) in this let-poly
+> Substituting UnifVar(9) = UnifVar(30)
+> Failed on: Int = TyVar(41)
+Res Err(FailedUnify)

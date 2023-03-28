@@ -58,29 +58,49 @@ impl<A: Display, B: Display> Display for PrintableVec<(A, B)> {
 
 impl Checker {
     pub fn pretty_heap_w_mapping(&self, mapping: &HashMap<usize, Ty>) {
+
+        let blargh = |v| {
+            match mapping.get(&v) {
+                Some(_) => mapping[&v].clone(),
+                None => Ty::UnifVar(v),
+            }
+        };
+
         println!("--- Heap w/ mapping ---");
-        for label in self.heap_types.keys() {
-            println!("{} => ", label);
-            if let Ty::Code(f) = &self.heap_types[label] {
+        for label in self.label_types.keys() {
+            println!("Original: {} => ", label);
+            let f= &self.label_types[label].0;
+            for r in 1..=MAX_REGISTER {
+                match f[&r].clone() {
+                    Ty::UnifVar(x) => println!("  {}: {:?}", r, blargh(x)),
+                    _ => println!("  {}: {:?}", r, f[&r]),
+                }
+            }
+            println!("  Polymorphic cases (jank): ");
+            for other in &self.label_types[label].1 {
+                println!("  ---");
                 for r in 1..=MAX_REGISTER {
-                    match f[&r].clone() {
-                        Ty::UnifVar(x) => println!("  {}: {:?}", r, mapping[&x]),
-                        _ => println!("  {}: {:?}", r, f[&r]),
+                    match other[&r].clone() {
+                        Ty::UnifVar(x) => println!("    {}: {:?}", r, blargh(x)),
+                        _ => println!("    {}: {}", r, f[&r]),
                     }
                 }
-            } else {
-                panic!("wat")
             }
         }
     }
 
     pub fn pretty_heap(&self) {
         println!("--- Heap ---");
-        for label in self.heap_types.keys() {
-            println!("{} => ", label);
-            if let Ty::Code(f) = &self.heap_types[label] {
+        for label in self.label_types.keys() {
+            println!("Original: {} => ", label);
+            let f= &self.label_types[label].0;
+            for r in 1..=MAX_REGISTER {
+                println!("  {}: {:?}", r, f[&r])
+            }
+            println!("  Polymorphic cases (jank): ");
+            for other in &self.label_types[label].1 {
                 for r in 1..=MAX_REGISTER {
-                    println!("  {}: {:?}", r, f[&r])
+                    println!("    {}: {}", r, other[&r])
                 }
             }
         }
