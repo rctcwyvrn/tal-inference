@@ -93,3 +93,16 @@ the issue is that we _still_ cant always constrain jumps
 - indirect jumps will still create infinite recursive types
 
 how to fix??
+- force equality in all cases _except_ when we have a code type
+
+
+## let poly plan
+- whenver a label is requested, create a new code type, remember it in a mapping of label->code types
+- force equality in jumps except on code types
+  - the let poly'd code types will then include all information that we know before we jump
+- unify
+- close over the new let-poly mapping
+- for each label
+  - grab its actual type
+  - grab all the code types (correspond with all the information that we know before each instance of the jump)
+  - ensure that the jumps are in fact satisfiable

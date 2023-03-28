@@ -93,7 +93,7 @@ impl Unifier {
             }
             _ => {
                 // todo: this is where i have to do the switcheroo i think
-                // but that never happens for tal i think? 
+                // but that never happens for tal i think?
                 panic!("I think this is unreachable? When would this happen?")
             }
         }
@@ -368,7 +368,7 @@ impl Unifier {
     pub fn satisfy(&mut self) -> Result<(), TypeError> {
         println!("--- Satisfying jumps ---");
         // Reminder:
-        // The parameter we're trying to pass it <: what the function is expecting 
+        // The parameter we're trying to pass it <: what the function is expecting
         for jump in self.satisfy.clone() {
             // debugging
             for (lhs, rhs) in &jump {

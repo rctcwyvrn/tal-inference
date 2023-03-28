@@ -262,16 +262,15 @@ pub fn ind_jump_weird() -> Program {
             "entry".to_owned(),
             vec![
                 Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
-                Instruction::BranchNonZero(1, Value::Word(WordValue::Label("does_nothing".to_owned()))),
+                Instruction::BranchNonZero(
+                    1,
+                    Value::Word(WordValue::Label("does_nothing".to_owned())),
+                ),
                 Instruction::Malloc(1, 1),
             ],
             Terminal::Jump(Value::Word(WordValue::Label("does_nothing".to_owned()))),
         ),
-        (
-            "does_nothing".to_owned(),
-            vec![],
-            Terminal::Halt,
-        ), 
+        ("does_nothing".to_owned(), vec![], Terminal::Halt),
     ]
     // vec![
     //     (
@@ -289,7 +288,7 @@ pub fn ind_jump_weird() -> Program {
     //             Instruction::Mov(2, Value::Word(WordValue::Label("doB".to_owned()))),
     //         ],
     //         Terminal::Jump(Value::Word(WordValue::Label("go".to_owned()))),
-    //     ), 
+    //     ),
 
     //     (
     //         "go".to_owned(),

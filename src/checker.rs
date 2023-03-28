@@ -2,7 +2,7 @@ use crate::unify::Unifier;
 use crate::{debug::sort_for_print, syntax::*};
 
 use core::panic;
-use std::{collections::HashMap};
+use std::collections::HashMap;
 use thiserror::Error;
 
 pub const MAX_REGISTER: usize = 3;
@@ -132,7 +132,7 @@ impl Checker {
         let is_indirect = match &val {
             Value::Register(_) => true,
             Value::Word(WordValue::Label(_)) => false,
-            _ => panic!("too lazy for proper error")
+            _ => panic!("too lazy for proper error"),
         };
 
         let val_ty = self.infer_value(val);
