@@ -1,5 +1,5 @@
 use core::panic;
-use std::{collections::{HashMap, VecDeque}, hash::Hash};
+use std::{collections::{HashMap, VecDeque}, hash::Hash, fmt::Display};
 
 use crate::{checker::*, debug::sort_for_print};
 
@@ -106,16 +106,16 @@ impl Unifier {
         Ok(())
     }
 
-    fn convert(ptr_mapping: HashMap<i64, Ty>) -> RhoMapping<Ty> {
+    fn convert<T: Clone+Display>(ptr_mapping: HashMap<i64, T>) -> RhoMapping<T> {
         ptr_mapping
             .into_iter()
             .map(|(idx, ty)| (idx, RhoEntry::Contains(ty)))
             .collect()
     }
 
-    fn add(set: RhoMapping<Ty>, rho: RhoMapping<Ty>) -> Result<RhoMapping<Ty>, TypeError> {
+    fn add<T: Clone+Display>(set: RhoMapping<T>, rho: RhoMapping<T>) -> Result<RhoMapping<T>, TypeError> {
         println!(
-            "(~) Computing X + Y for X = {} | Y = {}",
+            "  (~) Computing X + Y for X = {} | Y = {}",
             sort_for_print(&set),
             sort_for_print(&rho)
         );
@@ -128,7 +128,7 @@ impl Unifier {
                 return Err(TypeError::RhoFailedAdd);
             }
         }
-        println!("(~) X + Y = {}", sort_for_print(&result));
+        println!("  (~) X + Y = {}", sort_for_print(&result));
         Ok(result)
     }
 
@@ -346,83 +346,85 @@ impl Satisfier {
         &mut self,
         eqs: &mut VecDeque<(TyU, TyU)>,
         additional_rhos: &mut HashMap<usize, HashMap<i64, RhoEntry<TyU>>>,
-        l_set: HashMap<i64, TyU>,
-        l_rho: Option<Rho>,
-        r_set: HashMap<i64, TyU>,
-        r_rho_id: Option<Rho>,
+        given_set: HashMap<i64, TyU>,
+        given_rho_id: Option<Rho>,
+        require_set: HashMap<i64, TyU>,
+        require_rho_id: Option<Rho>,
     ) -> Result<(), TypeError> {
         println!(
-            "\n(++) Attempting to substitute ({:?}, {:?}) for ({:?}, {:?})",
-            l_set, l_rho, r_set, r_rho_id
+            "  (++) Attempting to substitute ({:?}, {:?}) for ({:?}, {:?})",
+            given_set, given_rho_id, require_set, require_rho_id,
         );
 
-        todo!("rhos for later");
+        // Convert the input l_rho into a concrete mapping
+        let given_rho = if let Some(id) = given_rho_id {
+            if self.rho_mappings.contains_key(&id.0) {
+                self.rho_mappings[&id.0].clone()
+            } else {
+                // make no assumptions about an unbound l_rho
+                HashMap::new()
+            }
+        } else {
+            // no l_rho
+            HashMap::new()
+        };
 
-        // // Convert the input l_rho into a concrete mapping
-        // let l_rho = if let Some(id) = l_rho {
-        //     if self.rho_mappings.contains_key(&id.0) {
-        //         self.rho_mappings[&id.0].clone()
-        //     } else {
-        //         // make no assumptions about an unbound l_rho
-        //         HashMap::new()
-        //     }
-        // } else {
-        //     // no l_rho
-        //     HashMap::new()
-        // };
+        let given = Unifier::add(given_rho, Unifier::convert(given_set))?;
+        let requirement_has_bound_rho = if let Some(id) = require_rho_id {
+            self.rho_mappings.contains_key(&id.0)
+        } else {
+            true // rho = {}
+        };
 
-        // let lhs = Unifier::add(l_rho, Unifier::convert(l_set))?;
-        // let r_rho_bound = if let Some(id) = r_rho_id {
-        //     self.rho_mappings.contains_key(&id.0)
-        // } else {
-        //     true
-        // };
-
-        // if r_rho_bound {
-        //     // case: right rho is bound
-        //     // check that l_set + l_rho = r_set + r_rho
-        //     let r_rho = if let Some(id) = r_rho_id {
-        //         self.rho_mappings[&id.0].clone()
-        //     } else {
-        //         HashMap::new()
-        //     };
-        //     let rhs = Unifier::add(r_rho, Unifier::convert(r_set))?;
-        //     if lhs != rhs {
-        //         return Err(TypeError::FailedJumpOnRho);
-        //     }
-        // } else {
-        //     // case: right rho is not bound
-        //     // check that l_set + l_rho <: r_set
-        //     let rhs = Unifier::convert(r_set);
-        //     println!(
-        //         "(++) solving for rho {} <: {} + rho({})",
-        //         sort_for_print(&lhs),
-        //         sort_for_print(&rhs),
-        //         r_rho_id.unwrap().0
-        //     );
-        //     for key in rhs.keys() {
-        //         if !lhs.contains_key(key) {
-        //             return Err(TypeError::FailedJumpOnRho);
-        //         }
-        //         match (lhs[key].clone(), rhs[key].clone()) {
-        //             (RhoEntry::Contains(l), RhoEntry::Contains(r)) => eqs.push_back((l, r)),
-        //             (RhoEntry::Absent, RhoEntry::Absent) => continue,
-        //             (RhoEntry::Contains(_), RhoEntry::Absent)
-        //             | (RhoEntry::Absent, RhoEntry::Contains(_)) => {
-        //                 return Err(TypeError::FailedJumpOnRho)
-        //             }
-        //         }
-        //     }
-        //     let mut rho_ty = HashMap::new();
-        //     for key in lhs.keys() {
-        //         if !rhs.contains_key(key) {
-        //             rho_ty.insert(*key, lhs[key].clone());
-        //         }
-        //     }
-        //     // todo: do we need to store the rho somewhere?
-        //     // is it possible to have multiple rhos referring to each other in the signature???
-        //     additional_rhos.insert(r_rho_id.unwrap().0, rho_ty);
-        // }
+        if requirement_has_bound_rho {
+            // case: requirement rho is bound
+            // check for equality
+            //   given_set + given_rho = require_set + require_rho
+            let require_rho = if let Some(id) = require_rho_id {
+                self.rho_mappings[&id.0].clone()
+            } else {
+                HashMap::new()
+            };
+            let require = Unifier::add(require_rho, Unifier::convert(require_set))?;
+            if given != require {
+                return Err(TypeError::FailedJumpOnRho);
+            }
+        } else {
+            // case: requirement does not have a set rho
+            // so it can be filled with any missing fields, so just check that the everything in require_set is in given
+            // check that given_set + given_rho <: require_set
+            let require = Unifier::convert(require_set);
+            println!(
+                "  (++) solving for rho {} <: {} + rho({})",
+                sort_for_print(&given),
+                sort_for_print(&require),
+                require_rho_id.unwrap().0
+            );
+            for key in require.keys() {
+                if !given.contains_key(key) {
+                    return Err(TypeError::FailedJumpOnRho);
+                }
+                match (given[key].clone(), require[key].clone()) {
+                    (RhoEntry::Contains(g), RhoEntry::Contains(r)) => eqs.push_back((g, r)),
+                    (RhoEntry::Absent, RhoEntry::Absent) => continue,
+                    (RhoEntry::Contains(_), RhoEntry::Absent)
+                    | (RhoEntry::Absent, RhoEntry::Contains(_)) => {
+                        return Err(TypeError::FailedJumpOnRho)
+                    }
+                }
+            }
+            // fill in the new rho (contains any fields missing from require_set)
+            let mut rho_ty = HashMap::new();
+            for key in given.keys() {
+                if !require.contains_key(key) {
+                    rho_ty.insert(*key, given[key].clone());
+                }
+            }
+            // todo: do we need to store the rho somewhere?
+            // is it possible to have multiple rhos referring to each other in the signature???
+            // just store it for now and we'll see
+            additional_rhos.insert(require_rho_id.unwrap().0, rho_ty);
+        }
         Ok(())
     }
 
@@ -434,15 +436,18 @@ impl Satisfier {
         let mut additional_rhos = HashMap::new();
         let mut eqs = VecDeque::new();
         for r in 1..=MAX_REGISTER {
-            eqs.push_back((code[&r].clone(), gamma[&r].clone()))
+            eqs.push_back((gamma[&r].clone(), code[&r].clone()))
         }
         while !eqs.is_empty() {
-            let next = eqs.pop_front().unwrap();
-            match next {
+            let (given, require) = eqs.pop_front().unwrap();
+            println!("[x] {} <: {}", given, require);
+            // left = gamma, ie what we have
+            // right = code, ie what the function expects
+            match (given.clone(), require.clone()) {
                 // types match, done
                 (s, t) if s == t => {}
                 // function allows anything
-                (TyU::Any, _) => {}
+                (_, TyU::Any) => {}
                 // function expects a label, we have a label
                 (TyU::Code(fn_a), TyU::Code(fn_b)) => {
                     // the function wants a fn_a, we want to give it a fn_b
@@ -454,13 +459,13 @@ impl Satisfier {
                 // insert case for ptrs
                 // https://ahnfelt.medium.com/row-polymorphism-crash-course-587f1e7b7c47
                 // do the switcheroo to attempt to solve for the rhos
-                (TyU::UniqPtr(l_set, l_rho), TyU::UniqPtr(r_set, r_rho))
-                | (TyU::UniqPtr(l_set, l_rho), TyU::Ptr(r_set, r_rho))
-                | (TyU::Ptr(l_set, l_rho), TyU::Ptr(r_set, r_rho)) => {
-                    self.satisfy_rho(&mut eqs, &mut additional_rhos, l_set, l_rho, r_set, r_rho)?;
+                (TyU::UniqPtr(g_set, g_rho), TyU::UniqPtr(r_set, r_rho))
+                | (TyU::UniqPtr(g_set, g_rho), TyU::Ptr(r_set, r_rho))
+                | (TyU::Ptr(g_set, g_rho), TyU::Ptr(r_set, r_rho)) => {
+                    self.satisfy_rho(&mut eqs, &mut additional_rhos, g_set, g_rho, r_set, r_rho)?;
                 }
                 _ => {
-                    println!("> Failed satisfy_jump on: {} = {}", next.0, next.1);
+                    println!("> Failed satisfy_jump on: {} <: {}", given, require);
                     return Err(TypeError::FailedJump);
                 }
             }
@@ -469,15 +474,12 @@ impl Satisfier {
     }
 
     pub fn satisfy(&mut self) -> Result<(), TypeError> {
-        println!("--- Satisfying jumps ---");
+        println!("--- Starting satisfy ---");
         // Reminder:
         // The parameter we're trying to pass it <: what the function is expecting
         for (code, gamma) in self.satisfy.clone() {
             // debugging
-            for r in 1..=MAX_REGISTER {
-                println!("{} <: {}", code[&r], gamma[&r]);
-            }
-
+            println!(" x-- jump start --x");
             let rho_mappings = self.satisfy_jump(code, gamma)?;
 
             // debugging
@@ -491,7 +493,7 @@ impl Satisfier {
             }
             println!("]");
 
-            println!("---");
+            println!(" x-- jump done --x");
         }
         Ok(())
     }

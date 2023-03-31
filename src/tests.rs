@@ -437,7 +437,7 @@ pub fn poly_heap_2() -> Program {
                 Instruction::Malloc(1, 5),
                 // shove a bunch of other random stuff in
                 Instruction::StoreStrong(1, 0, 3),
-                Instruction::StoreStrong(1, 0, 3),
+                Instruction::StoreStrong(1, 1, 3),
             ],
             Terminal::Jump(Value::Word(WordValue::Label("store".to_owned()))),
         ),

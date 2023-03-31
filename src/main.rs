@@ -21,9 +21,9 @@ fn main() {
     // pointers
     // let prog = basic_heap();
     // let prog = ptr_information_loss_1();
-    // let prog = ptr_information_loss_2();
+    let prog = ptr_information_loss_2();
 
-    let prog = poly_heap();
+    // let prog = poly_heap();
     // let prog = poly_heap_2();
     // let prog = poly_heap_3();
 
