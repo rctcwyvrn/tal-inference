@@ -6,14 +6,23 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 pub const MAX_REGISTER: usize = 3;
-type CodeTy = HashMap<Register, Ty>;
+pub type CodeTy = HashMap<Register, Ty>;
+pub type CodeTyU = HashMap<Register, TyU>;
+#[derive(Debug, PartialEq, Clone)]
+pub enum TyU {
+    Int,
+    Code(CodeTyU),
+    Ptr(HashMap<i64, TyU>, Option<Rho>),
+    UniqPtr(HashMap<i64, TyU>, Option<Rho>),
+    Any
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Ty {
     Int,
     Code(CodeTy),
     UnifVar(usize), // really should be in a TyX type but im lazy
-    TyVar(usize),
+    // TyVar(usize),
 
     // Pointer types
     Ptr(HashMap<i64, Ty>, Option<Rho>),
@@ -34,7 +43,7 @@ pub struct Checker {
     // global context
     pub heap_types: HashMap<Label, Ty>,
     pub constraints: Vec<(Ty, Ty)>,
-    pub satisfy: Vec<Vec<(Ty, Ty)>>,
+    pub satisfy: Vec<(CodeTy, CodeTy)>,
 }
 
 #[derive(Debug, Error)]
@@ -65,6 +74,9 @@ pub enum TypeError {
 
     #[error("pointers conflict")]
     PtrConflict,
+
+    #[error("entry label has requirements")]
+    InvalidEntrypoint,
 }
 
 impl Checker {
@@ -130,7 +142,7 @@ impl Checker {
 
     fn constrain_jump(&mut self, val: Value) -> Result<(), TypeError> {
         let is_indirect = match &val {
-            Value::Register(_) => true,
+            Value::Register(_) => true, // fixme: this is not correct
             Value::Word(WordValue::Label(_)) => false,
             _ => panic!("too lazy for proper error"),
         };
@@ -145,7 +157,6 @@ impl Checker {
         // which would reduce unifications a little, probably doesnt matter
 
         // constrain the parameters of th code type to be supertypes of what our current registers are
-        let mut jump_satisfy = Vec::new();
         for r in 1..=MAX_REGISTER {
             let ty = self.register_types[&r].clone();
             match ty {
@@ -157,18 +168,11 @@ impl Checker {
                     success &= self.constrain(&code_ty[&r], &ty);
                 }
                 // otherwise we have to check that it can be satisfied
-                _ => {
-                    println!(
-                        "- Adding jump satisfy for r_{} ({} <: {})",
-                        r, self.register_types[&r], code_ty[&r]
-                    );
-                    jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
-                }
+                _ => continue
             }
-            jump_satisfy.push((self.register_types[&r].clone(), code_ty[&r].clone()))
         }
 
-        self.satisfy.push(jump_satisfy);
+        self.satisfy.push((code_ty.clone(), self.register_types.clone()));
 
         if success {
             Ok(())
@@ -282,6 +286,22 @@ impl Checker {
         ty
     }
 
+    fn check_entrypoint(&self, program: &Program, mapping: &HashMap<usize, TyU>) -> Result<(), TypeError> {
+        let (label, _, _) = &program[0];
+        let ty = &self.heap_types[label];
+        if let Ty::Code(vars) = ty {
+            for r in 1..=MAX_REGISTER {
+                if let Ty::UnifVar(v) = vars[&r] {
+                    match mapping[&v] {
+                        TyU::Any => continue,
+                        _ => return Err(TypeError::InvalidEntrypoint),
+                    }
+                } else { panic!("unreachable") }
+            }
+        } else { panic!("unreachable") }
+        Ok(())
+    }
+
     pub fn check(&mut self, program: Program) -> Result<(), TypeError> {
         // compute free registers in each block
         // create label types for each block
@@ -308,16 +328,16 @@ impl Checker {
             Unifier::new(self.constraints.clone(), self.satisfy.clone(), self.cur_var);
 
         unifier.unify()?;
-        unifier.chase_all_to_root();
+        let mut satisfier = unifier.chase_all_to_root();
 
         println!("--- Mapping --- ");
-        let mapping = unifier.mapping.clone();
+        let mapping = satisfier.mapping.clone();
         for v in 1..=self.cur_var {
             println!("- unifVar({}) => {}", v, mapping[&v]);
         }
 
         println!("--- Rho mappings --- ");
-        for (rho, mapping) in unifier.rho_mappings.clone() {
+        for (rho, mapping) in satisfier.rho_mappings.clone() {
             println!("- rho({}) => {}", rho, sort_for_print(&mapping));
         }
 
@@ -325,8 +345,11 @@ impl Checker {
         self.pretty_heap();
         self.pretty_heap_w_mapping(&mapping);
 
+
         // unify the jumps to labelled blocks
-        unifier.satisfy()?;
+        satisfier.satisfy()?;
+
+        self.check_entrypoint(&program, &satisfier.mapping)?;
 
         Ok(())
     }

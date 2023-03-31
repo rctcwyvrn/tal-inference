@@ -1,0 +1,193 @@
+--- Heap ---
+case2 => 
+  1: UnifVar(4)
+  2: UnifVar(5)
+  3: UnifVar(6)
+entry => 
+  1: UnifVar(1)
+  2: UnifVar(2)
+  3: UnifVar(3)
+doA => 
+  1: UnifVar(10)
+  2: UnifVar(11)
+  3: UnifVar(12)
+go => 
+  1: UnifVar(7)
+  2: UnifVar(8)
+  3: UnifVar(9)
+doB => 
+  1: UnifVar(13)
+  2: UnifVar(14)
+  3: UnifVar(15)
+
+[+] Checking Mov(1, Word(Integer(1)))
+> Updating r1 to Int
+
+[+] Checking BranchNonZero(1, Word(Label("case2")))
+> Constraining Int == Int
+> Constraining Code({1:UnifVar(4) 2:UnifVar(5) 3:UnifVar(6) }) == Code({1:UnifVar(16) 2:UnifVar(17) 3:UnifVar(18) })
+
+[+] Checking Mov(2, Word(Label("doA")))
+> Updating r2 to Code({1:UnifVar(10) 2:UnifVar(11) 3:UnifVar(12) })
+
+[+] Checking Jump(Word(Label("go")))
+> Constraining Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }) == Code({1:UnifVar(19) 2:UnifVar(20) 3:UnifVar(21) })
+
+[+] Checking Mov(2, Word(Label("doB")))
+> Updating r2 to Code({1:UnifVar(13) 2:UnifVar(14) 3:UnifVar(15) })
+
+[+] Checking Jump(Word(Label("go")))
+> Constraining Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }) == Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+
+[+] Checking Mov(1, Word(Integer(1)))
+> Updating r1 to Int
+
+[+] Checking Mov(3, Word(Integer(1)))
+> Updating r3 to Int
+
+[+] Checking Jump(Register(2))
+> Constraining UnifVar(8) == Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+> Constraining UnifVar(25) == Int
+> Constraining UnifVar(27) == Int
+
+[+] Checking Arith(Add, 1, 1, Register(3))
+> Constraining UnifVar(10) == Int
+> Constraining UnifVar(12) == Int
+> Updating r1 to Int
+
+[+] Checking Halt
+
+[+] Checking Arith(Sub, 1, 1, Register(3))
+> Constraining UnifVar(13) == Int
+> Constraining UnifVar(15) == Int
+> Updating r1 to Int
+
+[+] Checking Halt
+--- Constraints --- 
+- Code({1:UnifVar(4) 2:UnifVar(5) 3:UnifVar(6) }) = Code({1:UnifVar(16) 2:UnifVar(17) 3:UnifVar(18) })
+- Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }) = Code({1:UnifVar(19) 2:UnifVar(20) 3:UnifVar(21) })
+- Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }) = Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+- UnifVar(8) = Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+- UnifVar(25) = Int
+- UnifVar(27) = Int
+- UnifVar(10) = Int
+- UnifVar(12) = Int
+- UnifVar(13) = Int
+- UnifVar(15) = Int
+
+--- starting unify ---
+> Constraining UnifVar(4) = UnifVar(16)
+> Constraining UnifVar(5) = UnifVar(17)
+> Constraining UnifVar(6) = UnifVar(18)
+> Constraining UnifVar(7) = UnifVar(19)
+> Constraining UnifVar(8) = UnifVar(20)
+> Constraining UnifVar(9) = UnifVar(21)
+> Constraining UnifVar(7) = UnifVar(22)
+> Constraining UnifVar(8) = UnifVar(23)
+> Constraining UnifVar(9) = UnifVar(24)
+> Substituting UnifVar(8) = Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+> Substituting UnifVar(25) = Int
+> Substituting UnifVar(27) = Int
+> Substituting UnifVar(10) = Int
+> Substituting UnifVar(12) = Int
+> Substituting UnifVar(13) = Int
+> Substituting UnifVar(15) = Int
+> Substituting UnifVar(16) = UnifVar(4)
+> Substituting UnifVar(17) = UnifVar(5)
+> Substituting UnifVar(18) = UnifVar(6)
+> Substituting UnifVar(19) = UnifVar(7)
+> Substituting UnifVar(20) = Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+> Substituting UnifVar(21) = UnifVar(9)
+> Substituting UnifVar(22) = UnifVar(7)
+> Substituting UnifVar(23) = Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+> Substituting UnifVar(24) = UnifVar(9)
+--- rhos --- 
+--- Mapping --- 
+- unifVar(1) => Any
+- unifVar(2) => Any
+- unifVar(3) => Any
+- unifVar(4) => Any
+- unifVar(5) => Any
+- unifVar(6) => Any
+- unifVar(7) => Any
+- unifVar(8) => Code({1:Int 2:Any 3:Int })
+- unifVar(9) => Any
+- unifVar(10) => Int
+- unifVar(11) => Any
+- unifVar(12) => Int
+- unifVar(13) => Int
+- unifVar(14) => Any
+- unifVar(15) => Int
+- unifVar(16) => Any
+- unifVar(17) => Any
+- unifVar(18) => Any
+- unifVar(19) => Any
+- unifVar(20) => Code({1:Int 2:Any 3:Int })
+- unifVar(21) => Any
+- unifVar(22) => Any
+- unifVar(23) => Code({1:Int 2:Any 3:Int })
+- unifVar(24) => Any
+- unifVar(25) => Int
+- unifVar(26) => Any
+- unifVar(27) => Int
+--- Rho mappings --- 
+--- Heap ---
+case2 => 
+  1: UnifVar(4)
+  2: UnifVar(5)
+  3: UnifVar(6)
+entry => 
+  1: UnifVar(1)
+  2: UnifVar(2)
+  3: UnifVar(3)
+doA => 
+  1: UnifVar(10)
+  2: UnifVar(11)
+  3: UnifVar(12)
+go => 
+  1: UnifVar(7)
+  2: UnifVar(8)
+  3: UnifVar(9)
+doB => 
+  1: UnifVar(13)
+  2: UnifVar(14)
+  3: UnifVar(15)
+--- Heap w/ mapping ---
+case2 => 
+  1: Any
+  2: Any
+  3: Any
+entry => 
+  1: Any
+  2: Any
+  3: Any
+doA => 
+  1: Int
+  2: Any
+  3: Int
+go => 
+  1: Any
+  2: Code({1:Int 2:Any 3:Int })
+  3: Any
+doB => 
+  1: Int
+  2: Any
+  3: Int
+--- Satisfying jumps ---
+Any <: Int
+Any <: Any
+rhos: []
+---
+Any <: Int
+Code({1:Int 2:Any 3:Int }) <: Code({1:Int 2:Any 3:Int })
+rhos: []
+---
+Any <: Any
+Code({1:Int 2:Any 3:Int }) <: Code({1:Int 2:Any 3:Int })
+rhos: []
+---
+Int <: Int
+Any <: Code({1:Int 2:Any 3:Int })
+rhos: []
+---
+Res Ok(())

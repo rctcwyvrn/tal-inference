@@ -479,6 +479,18 @@ pub fn poly_heap_3() -> Program {
     ]
 }
 
+pub fn invalid_entrypoint() -> Program {
+    vec![
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Arith(Op::Sub, 1, 2, Value::Register(3)),
+            ],
+            Terminal::Halt,
+        ),
+    ]
+}
+
 pub fn full_suite() -> Vec<Program> {
     vec![
         make_add_program(),
@@ -494,5 +506,6 @@ pub fn full_suite() -> Vec<Program> {
         poly_heap(),
         poly_heap_2(),
         poly_heap_3(),
+        invalid_entrypoint(),
     ]
 }
