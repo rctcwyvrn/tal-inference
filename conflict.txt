@@ -106,3 +106,35 @@ how to fix??
   - grab its actual type
   - grab all the code types (correspond with all the information that we know before each instance of the jump)
   - ensure that the jumps are in fact satisfiable
+
+plan
+- have two code types
+  - one that we have now Code(CodeTy)
+  - one for lifting to foralltype PolyCode(Hashmap<Register, Type or TypeVar>)
+    - i guess this should be done for all code types in the program after unification????
+    - the big difference is just interpreting equality of code vs polycode is very different (i think?)
+    - polycode equality, one by one on registers
+      - typevar can equal typevar (both are universal types)
+- or maybe this entire thing should be refactored to MustBeGeneric instead of typevar or smth like that????
+- jsut refactoring code to properly mean something besides this typevar nonsense
+  - post let-poly code type as a map from Hashmap<Register, Requires>
+  enum Requires {
+    Set(Ty),
+    Nothing,
+  }
+  - maybe all the code types should be like that ????
+    - ifasldfjasldfjksldfj
+
+plan
+- after unification map unifvars to
+  - Some(Ty)
+  - Any/None/Unbounded/something like that
+- during jumps, save the current gamma and the CodeTy
+  - do a subtype satisfiable after
+  - do the same on the let poly instances
+
+So
+- rip out all the changes to unifier
+- rip out typevars entirely
+- make close_mapping do the mapping after unification to ^
+- bring back the satisfy/subtyping stuff

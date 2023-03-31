@@ -137,7 +137,7 @@ impl Checker {
 
     fn constrain_jump(&mut self, val: Value) -> Result<(), TypeError> {
         let is_indirect = match &val {
-            Value::Register(_) => true,
+            Value::Register(_) => true, // FIXME: THIS IS NOT THE CORRECT CHECK FOR IS_INDIRECT! need to check that register holds the original unifvar for this code block
             Value::Word(WordValue::Label(_)) => false,
             _ => panic!("too lazy for proper error"),
         };

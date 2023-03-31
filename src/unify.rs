@@ -207,6 +207,8 @@ impl Unifier {
                 // extra cases for the let-poly nonsense
                 // typevar initialization
                 // UHHHHHH??? IDK IF THIS WORKS 
+
+                // this really shouldnt work, i need to represent "forall" properly
                 (Ty::TyVar(x), t) => {
                     println!("[!!] initializing TyVar({}) = {} in this let-poly", x, t);
                     Unifier::substitute(&mut self.mapping, &mut self.constraints, Ty::UnifVar(x), t)
@@ -257,12 +259,6 @@ impl Unifier {
                 println!("[??] Doing let poly {} = {}", sort_for_print(base), sort_for_print(&poly));
                 let mut constraints = Vec::new();
                 for r in 1..=MAX_REGISTER {
-                    // let lhs = self.close_type(base[&r].clone());
-                    // let closed = self.close_type(poly[&r].clone());
-                    // let rhs = match &closed{
-                    //     Ty::TyVar(v) => Ty::UnifVar(*v),
-                    //     _ => closed,
-                    // };
                     let lhs = self.chase_type(base[&r].clone());
                     let rhs = self.chase_type(poly[&r].clone());
                     constraints.push((lhs, rhs))
