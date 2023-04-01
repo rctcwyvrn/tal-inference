@@ -21,10 +21,7 @@ pub enum TyU {
 pub enum Ty {
     Int,
     Code(CodeTy),
-    UnifVar(usize), // really should be in a TyX type but im lazy
-    // TyVar(usize),
-
-    // Pointer types
+    UnifVar(usize), 
     Ptr(HashMap<i64, Ty>, Option<Rho>),
     UniqPtr(HashMap<i64, Ty>, Option<Rho>),
 }
@@ -243,8 +240,6 @@ impl Checker {
                 let row_constraint = HashMap::from([(idx, output_type.clone())]);
                 let expected_src = Ty::Ptr(row_constraint, Some(some_rho));
                 self.constrain_register(r_src, expected_src)?;
-                // remember, always update registers last...
-                // because you can load from a register into the same register
                 self.update_register(r_tar, output_type);
                 Ok(())
             }

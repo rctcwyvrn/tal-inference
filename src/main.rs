@@ -11,7 +11,7 @@ fn main() {
     let suite = full_suite();
     // let prog = make_int_program();
     // let prog = make_jump_program();
-    // let prog = make_indirect_jump_program();
+    let prog = make_indirect_jump_program();
     // let prog = ind_jump_weird();
     // let prog = ind_jump_wrong_registers();
     // let prog = ind_jump_forgetting();
@@ -26,7 +26,7 @@ fn main() {
     // let prog = valid_move_shared_ptr();
     // let prog = invalid_store_strong();
     // let prog = reorder_params_then_indirect_jump();
-    let prog = fallthrough();
+    // let prog = fallthrough();
 
     // let prog = poly_heap();
     // let prog = poly_heap_2();
@@ -34,6 +34,12 @@ fn main() {
 
     // let prog = invalid_entrypoint();
     // let prog = bug_indirect_jump_heuristic();
+
+    // let prog = presentation_easy();
+    let prog = presentation_unification();
+    let prog = presentation_pointers();
+    let prog = presentation_indirect();
+    // let prog = presentation_fallthrough();
 
     let mut checker = checker::Checker::new();
     println!("Res {:?}", checker.check(prog));

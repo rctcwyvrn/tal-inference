@@ -623,6 +623,165 @@ pub fn bug_indirect_jump_heuristic() -> Program {
     )]
 }
 
+// presentation examples
+
+pub fn presentation_easy() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+            Instruction::Mov(2, Value::Word(WordValue::Integer(2))),
+            Instruction::Arith(Op::Add, 3, 1, Value::Register(2)),
+        ],
+        Terminal::Halt,
+    )]
+}
+
+pub fn presentation_unification() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+            Instruction::Mov(2, Value::Word(WordValue::Integer(2))),
+        ],
+        Terminal::Jump(Value::Word(WordValue::Label("adder".to_owned()))),
+    ),
+    (
+        "adder".to_owned(),
+        vec![
+            Instruction::Arith(Op::Add, 3, 1, Value::Register(2)),
+        ],
+        Terminal::Halt,
+    )
+    ]
+}
+
+pub fn presentation_pointers() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            // r1 = malloc(5)
+            Instruction::Malloc(1, 5),
+            // r2 = r1[0]
+            // r2: unifVar(4)
+            Instruction::Load(2, 1, 0),
+            // r3 = entry
+            Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+            // r1[1] = r3
+            Instruction::StoreStrong(1, 1, 3),
+            // r2 = r1[1]
+            Instruction::Load(2, 1, 1),
+        ],
+        Terminal::Halt,
+    )]
+}
+
+pub fn presentation_indirect() -> Program {
+    // todo: write an example program using conditional jumps to different labels
+    // ie
+    // bnz r1 L.case2
+    // mov r2 L.doA
+    // jmp L.go
+    // L.case2:
+    //   mov r2 L.doB
+    // L.go:
+    //   mov r3 1
+    //   ... other setup
+    //   jmp r2
+    vec![
+        // expected type: all three registers generic
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+                Instruction::BranchNonZero(1, Value::Word(WordValue::Label("case2".to_owned()))),
+                Instruction::Mov(2, Value::Word(WordValue::Label("doA".to_owned()))),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("go".to_owned()))),
+        ),
+        (
+            "case2".to_owned(),
+            vec![
+                Instruction::Mov(2, Value::Word(WordValue::Label("doB".to_owned()))),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("go".to_owned()))),
+        ),
+
+        (
+            "go".to_owned(),
+            vec![
+                Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+                Instruction::Mov(3, Value::Word(WordValue::Integer(1))),
+            ],
+            Terminal::Jump(Value::Register(2)),
+        ),
+        (
+            "doA".to_owned(),
+            vec![Instruction::Arith(Op::Add, 1, 1, Value::Register(3))],
+            Terminal::Halt,
+        ),
+        (
+            "doB".to_owned(),
+            vec![Instruction::Arith(Op::Sub, 1, 1, Value::Register(3))],
+            Terminal::Halt,
+        ),
+    ]
+}
+
+pub fn presentation_fallthrough() -> Program {
+    vec![
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Malloc(1, 1),
+                Instruction::Mov(2, Value::Word(WordValue::Label("uses_ptr".to_owned())))
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("fallthrough".to_owned())))
+        ),
+        (
+            "fallthrough".to_owned(),
+            vec![
+            ],
+            Terminal::Jump(Value::Register(2))
+        ),
+        (
+            "uses_ptr".to_owned(),
+            vec![
+                Instruction::Load(1, 1, 0)
+            ],
+            Terminal::Halt
+        )
+    ]
+}
+
+// pub fn presentation_fact() -> Program {
+//     vec![
+//         (
+//             "entry".to_owned(),
+//             vec![
+//                 Instruction::Mov(1, Value::Word(WordValue::Integer(5))),
+//                 // r3 = Ptr<int, label>
+//                 Instruction::Mov(3, Value::Word(WordValue::Label("halt".to_owned())))
+//             ],
+//             Terminal::Jump(Value::Word(WordValue::Label("fact".to_owned())))
+//         ),
+//         (
+//             "fact".to_owned(),
+//             vec![
+//                 Instruction::BranchNonZero(1, Value::Word(WordValue::Label("fact_nonzero".to_owned()))),
+//                 Instruction::Mov(2, Value::Word(WordValue::Integer(1)))
+//             ],
+//             Terminal::Jump(Value::Register(3))
+//         ),
+//         (
+//             "fact_nonzero".to_owned(),
+//             vec![
+//                 Instruction
+//             ]
+//         )
+//     ]
+// }
+
 pub fn full_suite() -> Vec<Program> {
     vec![
         make_add_program(),

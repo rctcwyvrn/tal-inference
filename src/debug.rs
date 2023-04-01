@@ -86,8 +86,8 @@ impl Checker {
             if let Ty::Code(f) = &self.heap_types[label] {
                 for r in 1..=MAX_REGISTER {
                     match f[&r].clone() {
-                        Ty::UnifVar(x) => println!("  {}: {}", r, mapping[&x]),
-                        _ => println!("  {}: {}", r, f[&r]),
+                        Ty::UnifVar(x) => println!("  r{}: {}", r, mapping[&x]),
+                        _ => println!("  r{}: {}", r, f[&r]),
                     }
                 }
             } else {
@@ -102,7 +102,7 @@ impl Checker {
             println!("{} => ", label);
             if let Ty::Code(f) = &self.heap_types[label] {
                 for r in 1..=MAX_REGISTER {
-                    println!("  {}: {}", r, f[&r])
+                    println!("  r{}: {}", r, f[&r])
                 }
             }
         }

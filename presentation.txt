@@ -1,0 +1,95 @@
+type inference on tal
+
+motivations
+plan
+language syntax
+
+implementation
+- basic checking is easy
+  - keep register state, walk down generating constraints
+  - unify
+- pointers are a little more complicated
+  - use rho types
+  - logs of rho types being used and the equations that get solved 
+- jumps are really complicated 
+  - this is where the typechecker really falls apart and stops working as intended
+  - many valid programs end up being rejected
+
+jumps
+- indirect jump program, ask how it would intuitively be typechecked
+- logs of how make_indirect_jump_program is checked()
+  - at bnz, we see that its not indirect, so skip constraining (we'll come back to that)
+    - add a subtyping constraint
+    - we want to check that our currently set variables will satisfy the label we're trying to jump to 
+  - similar for jumping to go and case2
+  - what happens in go?
+    - we set two registers
+    - then we jump to r2
+    - r2 is an indirect jump, so we now add some constraints
+      - these constraints are put on the code type that we expect in r2
+      - why did we do this?
+        - if we didnt, then go would only accept functions that require no arguments
+        - we want to remember that we set these registers?
+    - why did we skip doing this before? dont want to put unecessary requirements on labels that dont need them
+        - example
+  - finally we check doA and doB, fairly simple
+  - unification results in the these types for the functions
+    - go can accept functions that have r1 and r3 set to integers
+    - doA and doB have their requirements in their signatures
+  - finally we check that our jumps were satisfiable (subtyping constraints)
+    - jump to case2, always satisfiable because no requirements
+    - jump to go with doA in r2, jump to go with doB in r2
+    - jump to r2 with gamma in go
+
+that all seemed to work correctly, so whats the issue?
+- what happens when we try to typecheck fallthrough?
+  - fallthrough cant jump to uses_ptr_in_r1
+- the issue is a fundamental issue in that we don't know how much to bound a parameter 
+  - the issue raised its head in go, where we didnt know how much we could restrict the function type
+  - we made an approximation, namely that we should bound it as much as we know we can satisfy 
+- but what about this program? (fallthrough)
+  - the middle label has no way of knowing that it should have extra requirements on its parameters
+- unless we were to look at all instances where the function is used, and then attempt to narrow it down from there
+  - we could theoretically look at all places where the label is used
+    - and if a register is always set before the label is jumped to then add it to the labels signature
+  - basically looking at the users program and generating a signature based on usage, before checking for consistency
+
+- but that seems fragile, espcially as more features get added
+```
+entry:
+  mov r2 is_used_indirectly
+  jump jumper
+
+jumper:
+  malloc r1 1
+  jump r2 // we know that this is the only case where is_used_indirectly will be jumped to
+
+is_used_indirectly:
+  jump uses_r1
+
+uses_r1:
+ load r1 1
+```
+```
+entry:
+  malloc r3 1
+  store r3 1 is_used_indirectly // how would we determine the uses of r2 from here?
+  jump jumper
+
+jumper:
+  malloc r1 1
+  load r2 r3 1
+  jump r2 
+
+is_used_indirectly:
+  jump uses_r1
+
+uses_r1:
+ load r1 1
+```
+
+tldr
+- i dont think this will work, unless i missed something fundamental 
+- as long as a label is "self contained" in that it sets what it requires and operates self sufficiently
+- it coudl also be fixed by just adding type hints but thats lame
+- i made my best attempt at full type reconstruction but i dont think it works
