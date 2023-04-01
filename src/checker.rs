@@ -29,6 +29,11 @@ pub enum Ty {
     UniqPtr(HashMap<i64, Ty>, Option<Rho>),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum TyRaw {
+    Int, Code, Ptr, UniqPtr,
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Rho(pub usize);
 
@@ -45,6 +50,7 @@ pub struct Checker {
     pub heap_types: HashMap<Label, Ty>,
     pub constraints: Vec<(Ty, Ty)>,
     pub satisfy: Vec<(CodeTy, CodeTy)>,
+    pub not_equal_constraints: Vec<(Ty, TyRaw)>,
 }
 
 #[derive(Debug, Error)]
@@ -96,6 +102,11 @@ impl Checker {
                 return a == b;
             }
         }
+    }
+
+    fn constrain_not_equal(&mut self, a: &Ty, b: &TyRaw) {
+        println!("> Constraining {} != {}", a, b);
+        self.not_equal_constraints.push((a.clone(), b.clone()));
     }
 
     fn fresh(&mut self) -> Ty {
@@ -179,10 +190,13 @@ impl Checker {
                 Ty::Int | Ty::Ptr(_, _) | Ty::UniqPtr(_, _) if is_indirect => {
                     // we could say that the parameter type is a type variable
                     // but that becomes intractable (??), this appears to work
+                    println!("(???) constraining r{} = {}", r, ty);
                     success &= self.constrain(&code_ty[&r], &ty);
                 }
                 // otherwise we have to check that it can be satisfied
-                _ => continue,
+                _ => {
+                    println!("(???) skipping r{} = {}", r, ty);
+                }
             }
         }
         println!(
@@ -215,6 +229,7 @@ impl Checker {
             }
             Instruction::Mov(r, v) => {
                 let rhs = self.infer_value(v);
+                self.constrain_not_equal(&rhs, &TyRaw::UniqPtr);
                 self.update_register(r, rhs);
                 Ok(())
             }
@@ -222,14 +237,20 @@ impl Checker {
             // heap instructions
             Instruction::Load(r_tar, r_src, idx) => {
                 let output_type = self.fresh();
-                self.update_register(r_tar, output_type.clone());
 
                 // expect that we at _least_ have a generic pointer with that idx set to the output type
                 let some_rho = self.fresh_rho();
-                let row_constraint = HashMap::from([(idx, output_type)]);
+                let row_constraint = HashMap::from([(idx, output_type.clone())]);
                 let expected_src = Ty::Ptr(row_constraint, Some(some_rho));
-                self.constrain_register(r_src, expected_src)
+                self.constrain_register(r_src, expected_src)?;
+                // remember, always update registers last...
+                // because you can load from a register into the same register
+                self.update_register(r_tar, output_type);
+                Ok(())
             }
+            // fixme: this should be a subtyping constraint
+            // refactor satisfy to store pairs of types like before? 
+            // unifier should count them as equal, and then satisfier should check
             Instruction::StoreStrong(r_tar, idx, r_src) => {
                 let old_rho = self.fresh_rho();
                 // generate a unifvar for the old type, but don't constrain it in any way
@@ -353,7 +374,7 @@ impl Checker {
 
         // unify the variables in the block bodies
         let mut unifier =
-            Unifier::new(self.constraints.clone(), self.satisfy.clone(), self.cur_var);
+            Unifier::new(self.constraints.clone(), self.satisfy.clone(), self.cur_var, self.not_equal_constraints.clone());
 
         unifier.unify()?;
         let mut satisfier = unifier.chase_all_to_root();
@@ -375,6 +396,7 @@ impl Checker {
 
         // unify the jumps to labelled blocks
         satisfier.satisfy()?;
+        satisfier.check_neq()?;
 
         self.check_entrypoint(&program, &satisfier.mapping)?;
 
@@ -390,6 +412,7 @@ impl Checker {
             heap_types: HashMap::new(),
             constraints: Vec::new(),
             satisfy: Vec::new(),
+            not_equal_constraints: Vec::new(),
         }
     }
 }

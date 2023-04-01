@@ -20,12 +20,14 @@ pub struct Unifier {
     variables: usize,
     pub mapping: HashMap<usize, Ty>,
     pub rho_mappings: HashMap<usize, RhoMapping<Ty>>,
+    pub not_equal: Vec<(Ty, TyRaw)>,
 }
 
 pub struct Satisfier {
     pub mapping: HashMap<usize, TyU>,
     pub rho_mappings: HashMap<usize, RhoMapping<TyU>>,
     pub satisfy: Vec<(CodeTyU, CodeTyU)>,
+    pub not_equal: Vec<(TyU, TyRaw)>
 }
 
 // todo: newtype wrap usize being the unifvar types, along with seperating out the whole TyX thing
@@ -336,10 +338,16 @@ impl Unifier {
             new_satisfy.push((closed_code, closed_gamma));
         }
         let closed_satisfy = new_satisfy;
+
+        let mut closed_neq = Vec::new();
+        for (ty, constr) in &self.not_equal {
+            closed_neq.push((self.chase_to_root(ty.clone()), *constr))
+        }
         Satisfier {
             mapping: closed_mapping,
             rho_mappings: closed_rho_mappings,
             satisfy: closed_satisfy,
+            not_equal: closed_neq,
         }
     }
 
@@ -347,6 +355,7 @@ impl Unifier {
         constraints: Vec<(Ty, Ty)>,
         satisfy: Vec<(CodeTy, CodeTy)>,
         variables: usize,
+        not_equal: Vec<(Ty, TyRaw)>,
     ) -> Unifier {
         Unifier {
             constraints: constraints.into(),
@@ -354,6 +363,7 @@ impl Unifier {
             variables,
             mapping: HashMap::new(),
             rho_mappings: HashMap::new(),
+            not_equal,
         }
     }
 }
@@ -458,8 +468,9 @@ impl Satisfier {
         while !eqs.is_empty() {
             let (given, require) = eqs.pop_front().unwrap();
             println!("[x] {} <: {}", given, require);
-            // left = gamma, ie what we have
+            // left = gamma, ie what we have 
             // right = code, ie what the function expects
+            // LEFT IS GIVEN, RIGHT IS REQUIRED
             match (given.clone(), require.clone()) {
                 // types match, done
                 (s, t) if s == t => {}
@@ -467,10 +478,10 @@ impl Satisfier {
                 (_, TyU::Any) => {}
                 // function expects a label, we have a label
                 (TyU::Code(fn_a), TyU::Code(fn_b)) => {
-                    // the function wants a fn_a, we want to give it a fn_b
-                    // the function is able to at least set a context that satisfies fn_a, so check if that satisfies fn_b
-                    let code = fn_b.clone();
-                    let gamma = fn_a.clone();
+                    // the function wants a fn_b, we want to give it a fn_a
+                    // the function is able to at least set a context that satisfies fn_b, so check if that satisfies fn_a
+                    let code = fn_a.clone();
+                    let gamma = fn_b.clone();
                     self.satisfy_jump(code, gamma)?;
                 }
                 // insert case for ptrs
@@ -512,6 +523,36 @@ impl Satisfier {
 
             println!(" x-- jump done --x");
         }
+        println!("--- Done satisfy ---");
         Ok(())
     }
+
+    pub fn check_neq(&mut self) -> Result<(), TypeError> {
+        println!("--- Starting not-equal checks ---");
+        for eq in &self.not_equal {
+            let fail = match eq.clone() {
+                (TyU::Int, TyRaw::Int) => true,
+                (TyU::Code(_), TyRaw::Code) => true,
+                (TyU::Ptr(_, _), TyRaw::Ptr) => true,
+                (TyU::UniqPtr(_, _), TyRaw::UniqPtr) => true,
+                (TyU::Any, _) => {
+                    // fixme: what to do here? 
+                    // this is sound, but prevents anyone from moving an unbound parameter
+                    // when does a parameter end up unbound?
+                    // when you just move it and never bound it in any way
+                    // the only use case would be moving and then jumping
+                    // see test::reorder_params_then_indirect_jump
+                    true
+                }
+                _ => false
+            };
+            if fail {
+                println!("Failed not-equal check on {} != {}", eq.0, eq.1);
+                return Err(TypeError::FailedUnify);
+            }
+        }
+        println!("--- Done not-equal checks ---");
+        Ok(())
+    }
+
 }

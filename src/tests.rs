@@ -411,6 +411,127 @@ pub fn ptr_information_loss_2() -> Program {
     )]
 }
 
+pub fn invalid_move_unique_ptr() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            Instruction::Malloc(1, 1),
+            Instruction::Mov(2, Value::Register(1))
+        ],
+        Terminal::Halt
+    )]
+}
+
+pub fn valid_move_shared_ptr() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            Instruction::Malloc(1, 1),
+            Instruction::Commit(1),
+            Instruction::Mov(2, Value::Register(1))
+        ],
+        Terminal::Halt
+    )]
+}
+
+pub fn invalid_store_strong() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            Instruction::Malloc(1, 1),
+            Instruction::Commit(1),
+            Instruction::Mov(2, Value::Word(WordValue::Label("entry".to_owned()))),
+            Instruction::StoreStrong(1, 0, 2),
+        ],
+        Terminal::Halt
+    )]
+}
+
+// this program fails to typecheck but for the wrong reason
+// 1. reorder doesnt know that it should expect a uptr in the first slot, so it cant call uses_ptr_in_r3
+// 2. but it should fail to typecheck because we're moving a unique pointer
+// fixme: subtyping willy nilly also causes issues, what if we subtype a uptr to a ptr and then forget that it was actually a uptr?
+// can that happen?
+pub fn reorder_params_then_indirect_jump() -> Program {
+    vec![
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Malloc(1, 1),
+                Instruction::Mov(2, Value::Word(WordValue::Label("uses_ptr_in_r3".to_owned()))),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("reorder_r1_to_r3".to_owned())))
+        ),
+        (
+            "reorder_r1_to_r3".to_owned(),
+            vec![
+                Instruction::Mov(3, Value::Register(1)) 
+            ],
+            Terminal::Jump(Value::Register(2))
+        ),
+        (
+            "uses_ptr_in_r3".to_owned(),
+            vec![
+                Instruction::Load(3, 3, 0)
+            ],
+            Terminal::Halt
+        )
+    ]
+}
+
+// pub fn reorder_with_hints() -> Program {
+//     vec![
+//         (
+//             "entry".to_owned(),
+//             vec![
+//                 Instruction::Malloc(1, 1),
+//                 Instruction::Mov(2, Value::Word(WordValue::Label("uses_ptr_in_r3".to_owned()))),
+//             ],
+//             Terminal::Jump(Value::Word(WordValue::Label("reorder_r1_to_r3".to_owned())))
+//         ),
+//         (
+//             "reorder_r1_to_r3".to_owned(),
+//             vec![
+//                 // Instruction::TypeHint(1, TyRaw::UniqPtr)
+//                 Instruction::Mov(3, Value::Register(1)) 
+//             ],
+//             Terminal::Jump(Value::Register(2))
+//         ),
+//         (
+//             "uses_ptr_in_r3".to_owned(),
+//             vec![
+//                 Instruction::Load(3, 3, 0)
+//             ],
+//             Terminal::Halt
+//         )
+//     ]
+// }
+
+pub fn fallthrough() -> Program {
+    vec![
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Malloc(1, 1),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("fallthrough".to_owned())))
+        ),
+        (
+            "fallthrough".to_owned(),
+            vec![
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("uses_ptr_in_r1".to_owned())))
+        ),
+        (
+            "uses_ptr_in_r1".to_owned(),
+            vec![
+                Instruction::Load(3, 3, 0)
+            ],
+            Terminal::Halt
+        )
+    ]
+}
+
 pub fn poly_heap() -> Program {
     vec![
         (

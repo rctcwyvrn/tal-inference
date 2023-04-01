@@ -11,7 +11,7 @@ fn main() {
     let suite = full_suite();
     // let prog = make_int_program();
     // let prog = make_jump_program();
-    let prog = make_indirect_jump_program();
+    // let prog = make_indirect_jump_program();
     // let prog = ind_jump_weird();
     // let prog = ind_jump_wrong_registers();
     // let prog = ind_jump_forgetting();
@@ -22,6 +22,11 @@ fn main() {
     // let prog = basic_heap();
     // let prog = ptr_information_loss_1();
     // let prog = ptr_information_loss_2();
+    // let prog = invalid_move_unique_ptr();
+    // let prog = valid_move_shared_ptr();
+    // let prog = invalid_store_strong();
+    // let prog = reorder_params_then_indirect_jump();
+    let prog = fallthrough();
 
     // let prog = poly_heap();
     // let prog = poly_heap_2();

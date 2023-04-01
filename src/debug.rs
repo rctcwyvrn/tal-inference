@@ -29,6 +29,17 @@ impl Display for TyU {
     }
 }
 
+impl Display for TyRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TyRaw::Int => write!(f, "Int"),
+            TyRaw::Code => write!(f, "Code"),
+            TyRaw::Ptr => write!(f, "Ptr"),
+            TyRaw::UniqPtr => write!(f, "Uptr"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PrintableVec<T>(Vec<T>);
 
