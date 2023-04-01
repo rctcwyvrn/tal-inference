@@ -2,7 +2,7 @@ use crate::unify::Unifier;
 use crate::{debug::sort_for_print, syntax::*};
 
 use core::panic;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 pub const MAX_REGISTER: usize = 3;
@@ -14,7 +14,7 @@ pub enum TyU {
     Code(CodeTyU),
     Ptr(HashMap<i64, TyU>, Option<Rho>),
     UniqPtr(HashMap<i64, TyU>, Option<Rho>),
-    Any
+    Any,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -39,6 +39,7 @@ pub struct Checker {
 
     // local context
     pub register_types: HashMap<Register, Ty>,
+    pub cur_label: String,
 
     // global context
     pub heap_types: HashMap<Label, Ty>,
@@ -141,13 +142,26 @@ impl Checker {
     }
 
     fn constrain_jump(&mut self, val: Value) -> Result<(), TypeError> {
-        let is_indirect = match &val {
-            Value::Register(_) => true, // fixme: this is not correct
-            Value::Word(WordValue::Label(_)) => false,
-            _ => panic!("too lazy for proper error"),
-        };
-
         let val_ty = self.infer_value(val);
+
+        // scuffed!
+        let is_indirect = {
+            let current_label_ty = self.heap_types[&self.cur_label].clone();
+            let current_label_starting_gamma = if let Ty::Code(c) = current_label_ty {
+                c
+            } else {
+                panic!()
+            };
+            let current_label_starting_unifvars: HashSet<usize> = current_label_starting_gamma
+                .iter()
+                .map(|(_, t)| if let Ty::UnifVar(v) = t { *v } else { panic!() })
+                .collect();
+            match val_ty {
+                Ty::UnifVar(x) if current_label_starting_unifvars.contains(&x) => true,
+                _ => false,
+            }
+        };
+        println!("(???) is_indirect? {} ({})", is_indirect, val_ty);
         let code_ty = self.init_code_type();
 
         // constrain the value that we're jumping to to be a code type
@@ -168,11 +182,16 @@ impl Checker {
                     success &= self.constrain(&code_ty[&r], &ty);
                 }
                 // otherwise we have to check that it can be satisfied
-                _ => continue
+                _ => continue,
             }
         }
-
-        self.satisfy.push((code_ty.clone(), self.register_types.clone()));
+        println!(
+            "> Adding jump subtype constraint {} <: {}",
+            sort_for_print(&self.register_types),
+            sort_for_print(&code_ty)
+        );
+        self.satisfy
+            .push((code_ty.clone(), self.register_types.clone()));
 
         if success {
             Ok(())
@@ -269,6 +288,7 @@ impl Checker {
         let ty = self.heap_types[&block.0].clone();
         if let Ty::Code(gamma) = ty {
             self.register_types = gamma;
+            self.cur_label = block.0.clone();
             for instr in &block.1 {
                 self.check_instruction(instr.clone())?;
             }
@@ -286,7 +306,11 @@ impl Checker {
         ty
     }
 
-    fn check_entrypoint(&self, program: &Program, mapping: &HashMap<usize, TyU>) -> Result<(), TypeError> {
+    fn check_entrypoint(
+        &self,
+        program: &Program,
+        mapping: &HashMap<usize, TyU>,
+    ) -> Result<(), TypeError> {
         let (label, _, _) = &program[0];
         let ty = &self.heap_types[label];
         if let Ty::Code(vars) = ty {
@@ -296,9 +320,13 @@ impl Checker {
                         TyU::Any => continue,
                         _ => return Err(TypeError::InvalidEntrypoint),
                     }
-                } else { panic!("unreachable") }
+                } else {
+                    panic!("unreachable")
+                }
             }
-        } else { panic!("unreachable") }
+        } else {
+            panic!("unreachable")
+        }
         Ok(())
     }
 
@@ -345,7 +373,6 @@ impl Checker {
         self.pretty_heap();
         self.pretty_heap_w_mapping(&mapping);
 
-
         // unify the jumps to labelled blocks
         satisfier.satisfy()?;
 
@@ -359,6 +386,7 @@ impl Checker {
             cur_rho: 0,
             cur_var: 0,
             register_types: HashMap::new(),
+            cur_label: "".to_owned(),
             heap_types: HashMap::new(),
             constraints: Vec::new(),
             satisfy: Vec::new(),

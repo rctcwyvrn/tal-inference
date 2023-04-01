@@ -1,3 +1,5 @@
+use std::vec;
+
 use crate::syntax::*;
 
 pub fn make_add_program() -> Program {
@@ -480,15 +482,24 @@ pub fn poly_heap_3() -> Program {
 }
 
 pub fn invalid_entrypoint() -> Program {
-    vec![
-        (
-            "entry".to_owned(),
-            vec![
-                Instruction::Arith(Op::Sub, 1, 2, Value::Register(3)),
-            ],
-            Terminal::Halt,
-        ),
-    ]
+    vec![(
+        "entry".to_owned(),
+        vec![Instruction::Arith(Op::Sub, 1, 2, Value::Register(3))],
+        Terminal::Halt,
+    )]
+}
+
+pub fn bug_indirect_jump_heuristic() -> Program {
+    vec![(
+        "entry".to_owned(),
+        vec![
+            Instruction::Mov(3, Value::Word(WordValue::Label("entry".to_owned()))),
+            Instruction::Mov(2, Value::Word(WordValue::Integer(1))),
+            Instruction::BranchNonZero(2, Value::Register(3)), // checker thinks this is indirect
+                                                               // and puts constraints on entry -> invalidentrypoint
+        ],
+        Terminal::Halt,
+    )]
 }
 
 pub fn full_suite() -> Vec<Program> {
@@ -507,5 +518,6 @@ pub fn full_suite() -> Vec<Program> {
         poly_heap_2(),
         poly_heap_3(),
         invalid_entrypoint(),
+        bug_indirect_jump_heuristic(),
     ]
 }

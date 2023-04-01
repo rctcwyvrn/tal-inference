@@ -1,5 +1,8 @@
 use core::panic;
-use std::{collections::{HashMap, VecDeque}, hash::Hash, fmt::Display};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Display,
+};
 
 use crate::{checker::*, debug::sort_for_print};
 
@@ -106,14 +109,17 @@ impl Unifier {
         Ok(())
     }
 
-    fn convert<T: Clone+Display>(ptr_mapping: HashMap<i64, T>) -> RhoMapping<T> {
+    fn convert<T: Clone + Display>(ptr_mapping: HashMap<i64, T>) -> RhoMapping<T> {
         ptr_mapping
             .into_iter()
             .map(|(idx, ty)| (idx, RhoEntry::Contains(ty)))
             .collect()
     }
 
-    fn add<T: Clone+Display>(set: RhoMapping<T>, rho: RhoMapping<T>) -> Result<RhoMapping<T>, TypeError> {
+    fn add<T: Clone + Display>(
+        set: RhoMapping<T>,
+        rho: RhoMapping<T>,
+    ) -> Result<RhoMapping<T>, TypeError> {
         println!(
             "  (~) Computing X + Y for X = {} | Y = {}",
             sort_for_print(&set),
@@ -132,7 +138,11 @@ impl Unifier {
         Ok(result)
     }
 
-    fn unify_rho_mappings(&mut self, l: RhoMapping<Ty>, r: RhoMapping<Ty>) -> Result<(), TypeError> {
+    fn unify_rho_mappings(
+        &mut self,
+        l: RhoMapping<Ty>,
+        r: RhoMapping<Ty>,
+    ) -> Result<(), TypeError> {
         for key in l.keys() {
             if r.contains_key(key) {
                 self.unify_rho_entries(l[key].clone(), r[key].clone())?;
@@ -182,7 +192,11 @@ impl Unifier {
         Ok(result)
     }
 
-    fn unify_rho_id_with_mapping(&mut self, rho: Rho, set: RhoMapping<Ty>) -> Result<(), TypeError> {
+    fn unify_rho_id_with_mapping(
+        &mut self,
+        rho: Rho,
+        set: RhoMapping<Ty>,
+    ) -> Result<(), TypeError> {
         let rho_id = rho.0;
         if self.rho_mappings.contains_key(&rho_id) {
             println!(
@@ -312,17 +326,21 @@ impl Unifier {
         let mut new_satisfy = Vec::new();
         for (code, gamma) in &self.satisfy {
             let closed_code = code
-            .iter()
-            .map(|(k,v)| (*k, self.chase_to_root(v.clone())))
-            .collect();
+                .iter()
+                .map(|(k, v)| (*k, self.chase_to_root(v.clone())))
+                .collect();
             let closed_gamma = gamma
                 .iter()
-                .map(|(k,v)| (*k, self.chase_to_root(v.clone())))
+                .map(|(k, v)| (*k, self.chase_to_root(v.clone())))
                 .collect();
             new_satisfy.push((closed_code, closed_gamma));
         }
         let closed_satisfy = new_satisfy;
-        Satisfier { mapping: closed_mapping, rho_mappings: closed_rho_mappings, satisfy: closed_satisfy }
+        Satisfier {
+            mapping: closed_mapping,
+            rho_mappings: closed_rho_mappings,
+            satisfy: closed_satisfy,
+        }
     }
 
     pub fn new(
@@ -339,7 +357,6 @@ impl Unifier {
         }
     }
 }
-
 
 impl Satisfier {
     fn satisfy_rho(
