@@ -35,12 +35,13 @@ fn main() {
     // let prog = invalid_entrypoint();
     // let prog = bug_indirect_jump_heuristic();
 
-    // let prog = presentation_easy();
+    let prog = presentation_easy();
     let prog = presentation_unification();
     let prog = presentation_pointers();
     let prog = presentation_indirect();
     // let prog = presentation_fallthrough();
 
+    println!("Typechecking {:?}", prog);
     let mut checker = checker::Checker::new();
     println!("Res {:?}", checker.check(prog));
 }
