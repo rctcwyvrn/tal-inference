@@ -31,7 +31,7 @@ The instructions are
 - `malloc r1 n`
 - `commit r1`
 
-which follow the same runtime semantics as what we saw in ATAPL. 
+which all follow the same runtime semantics as what we saw in ATAPL. 
 
 # Typing rules
 
@@ -72,6 +72,7 @@ $$
 \frac{\Gamma_1 = \{r: X_r | r\in R\} \quad X_r \in FTV(\Psi) \quad \Psi;\Gamma_1\vdash I: (\Gamma_1, \emptyset) \rightarrow (\Gamma, C)}
 { \Psi\vdash I: Code(L(S(\Gamma_1)))} (\text{SeqTy})
 $$
+
 where $S$ is the mapping generated from solving $C$ and $L$ is a substitution from $X_r \rightarrow Top$.
 
 ## Jumps
