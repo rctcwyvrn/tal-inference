@@ -256,9 +256,11 @@ impl Checker {
                 let expected_tar = Ty::UniqPtr(row_constraint, Some(old_rho));
                 self.constrain_register(r_tar, expected_tar)?;
 
-                // old_rho remembers all the fields set before
                 let new_type = self.register_types[&r_src].clone();
+                // check that we aren't storing a uniqptr
+                self.constrain_not_equal(&new_type, &TyRaw::UniqPtr);
                 let new_known = HashMap::from([(idx, new_type)]);
+                // old_rho remembers all the fields set before
                 // we now have a uniqptr with all the old fields and the one new field
                 let new_tar = Ty::UniqPtr(new_known, Some(old_rho));
                 self.update_register(r_tar, new_tar);

@@ -677,19 +677,7 @@ pub fn presentation_pointers() -> Program {
 }
 
 pub fn presentation_indirect() -> Program {
-    // todo: write an example program using conditional jumps to different labels
-    // ie
-    // bnz r1 L.case2
-    // mov r2 L.doA
-    // jmp L.go
-    // L.case2:
-    //   mov r2 L.doB
-    // L.go:
-    //   mov r3 1
-    //   ... other setup
-    //   jmp r2
     vec![
-        // expected type: all three registers generic
         (
             "entry".to_owned(),
             vec![
@@ -753,34 +741,6 @@ pub fn presentation_fallthrough() -> Program {
         )
     ]
 }
-
-// pub fn presentation_fact() -> Program {
-//     vec![
-//         (
-//             "entry".to_owned(),
-//             vec![
-//                 Instruction::Mov(1, Value::Word(WordValue::Integer(5))),
-//                 // r3 = Ptr<int, label>
-//                 Instruction::Mov(3, Value::Word(WordValue::Label("halt".to_owned())))
-//             ],
-//             Terminal::Jump(Value::Word(WordValue::Label("fact".to_owned())))
-//         ),
-//         (
-//             "fact".to_owned(),
-//             vec![
-//                 Instruction::BranchNonZero(1, Value::Word(WordValue::Label("fact_nonzero".to_owned()))),
-//                 Instruction::Mov(2, Value::Word(WordValue::Integer(1)))
-//             ],
-//             Terminal::Jump(Value::Register(3))
-//         ),
-//         (
-//             "fact_nonzero".to_owned(),
-//             vec![
-//                 Instruction
-//             ]
-//         )
-//     ]
-// }
 
 pub fn full_suite() -> Vec<Program> {
     vec![

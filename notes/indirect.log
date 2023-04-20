@@ -1,0 +1,269 @@
+```rust
+vec![
+        (
+            "entry".to_owned(),
+            vec![
+                Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+                Instruction::BranchNonZero(1, Value::Word(WordValue::Label("case2".to_owned()))),
+                Instruction::Mov(2, Value::Word(WordValue::Label("doA".to_owned()))),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("go".to_owned()))),
+        ),
+        (
+            "case2".to_owned(),
+            vec![
+                Instruction::Mov(2, Value::Word(WordValue::Label("doB".to_owned()))),
+            ],
+            Terminal::Jump(Value::Word(WordValue::Label("go".to_owned()))),
+        ),
+
+        (
+            "go".to_owned(),
+            vec![
+                Instruction::Mov(1, Value::Word(WordValue::Integer(1))),
+                Instruction::Mov(3, Value::Word(WordValue::Integer(1))),
+            ],
+            Terminal::Jump(Value::Register(2)),
+        ),
+        (
+            "doA".to_owned(),
+            vec![Instruction::Arith(Op::Add, 1, 1, Value::Register(3))],
+            Terminal::Halt,
+        ),
+        (
+            "doB".to_owned(),
+            vec![Instruction::Arith(Op::Sub, 1, 1, Value::Register(3))],
+            Terminal::Halt,
+        ),
+    ]
+```
+
+--- Heap ---
+doB => 
+  r1: UnifVar(13)
+  r2: UnifVar(14)
+  r3: UnifVar(15)
+go => 
+  r1: UnifVar(7)
+  r2: UnifVar(8)
+  r3: UnifVar(9)
+case2 => 
+  r1: UnifVar(4)
+  r2: UnifVar(5)
+  r3: UnifVar(6)
+entry => 
+  r1: UnifVar(1)
+  r2: UnifVar(2)
+  r3: UnifVar(3)
+doA => 
+  r1: UnifVar(10)
+  r2: UnifVar(11)
+  r3: UnifVar(12)
+
+[+] Checking Mov(1, Word(Integer(1)))
+> Constraining Int != Uptr
+> Updating r1 to Int
+
+[+] Checking BranchNonZero(1, Word(Label("case2")))
+> Constraining Int == Int
+(???) is_indirect? false (Code({1:UnifVar(4) 2:UnifVar(5) 3:UnifVar(6) }))
+> Constraining Code({1:UnifVar(4) 2:UnifVar(5) 3:UnifVar(6) }) == Code({1:UnifVar(16) 2:UnifVar(17) 3:UnifVar(18) })
+(???) skipping r1 = Int
+(???) skipping r2 = UnifVar(2)
+(???) skipping r3 = UnifVar(3)
+> Adding jump subtype constraint {1:Int 2:UnifVar(2) 3:UnifVar(3) } <: {1:UnifVar(16) 2:UnifVar(17) 3:UnifVar(18) }
+
+[+] Checking Mov(2, Word(Label("doA")))
+> Constraining Code({1:UnifVar(10) 2:UnifVar(11) 3:UnifVar(12) }) != Uptr
+> Updating r2 to Code({1:UnifVar(10) 2:UnifVar(11) 3:UnifVar(12) })
+
+[+] Checking Jump(Word(Label("go")))
+(???) is_indirect? false (Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }))
+> Constraining Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }) == Code({1:UnifVar(19) 2:UnifVar(20) 3:UnifVar(21) })
+(???) skipping r1 = Int
+(???) skipping r2 = Code({1:UnifVar(10) 2:UnifVar(11) 3:UnifVar(12) })
+(???) skipping r3 = UnifVar(3)
+> Adding jump subtype constraint {1:Int 2:Code({1:UnifVar(10) 2:UnifVar(11) 3:UnifVar(12) }) 3:UnifVar(3) } <: {1:UnifVar(19) 2:UnifVar(20) 3:UnifVar(21) }
+
+[+] Checking Mov(2, Word(Label("doB")))
+> Constraining Code({1:UnifVar(13) 2:UnifVar(14) 3:UnifVar(15) }) != Uptr
+> Updating r2 to Code({1:UnifVar(13) 2:UnifVar(14) 3:UnifVar(15) })
+
+[+] Checking Jump(Word(Label("go")))
+(???) is_indirect? false (Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }))
+> Constraining Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }) == Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+(???) skipping r1 = UnifVar(4)
+(???) skipping r2 = Code({1:UnifVar(13) 2:UnifVar(14) 3:UnifVar(15) })
+(???) skipping r3 = UnifVar(6)
+> Adding jump subtype constraint {1:UnifVar(4) 2:Code({1:UnifVar(13) 2:UnifVar(14) 3:UnifVar(15) }) 3:UnifVar(6) } <: {1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) }
+
+[+] Checking Mov(1, Word(Integer(1)))
+> Constraining Int != Uptr
+> Updating r1 to Int
+
+[+] Checking Mov(3, Word(Integer(1)))
+> Constraining Int != Uptr
+> Updating r3 to Int
+
+[+] Checking Jump(Register(2))
+(???) is_indirect? true (UnifVar(8))
+> Constraining UnifVar(8) == Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+(???) constraining r1 = Int
+> Constraining UnifVar(25) == Int
+(???) skipping r2 = UnifVar(8)
+(???) constraining r3 = Int
+> Constraining UnifVar(27) == Int
+> Adding jump subtype constraint {1:Int 2:UnifVar(8) 3:Int } <: {1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) }
+
+[+] Checking Arith(Add, 1, 1, Register(3))
+> Constraining UnifVar(10) == Int
+> Constraining UnifVar(12) == Int
+> Updating r1 to Int
+
+[+] Checking Halt
+
+[+] Checking Arith(Sub, 1, 1, Register(3))
+> Constraining UnifVar(13) == Int
+> Constraining UnifVar(15) == Int
+> Updating r1 to Int
+
+[+] Checking Halt
+--- Constraints --- 
+- Code({1:UnifVar(4) 2:UnifVar(5) 3:UnifVar(6) }) = Code({1:UnifVar(16) 2:UnifVar(17) 3:UnifVar(18) })
+- Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }) = Code({1:UnifVar(19) 2:UnifVar(20) 3:UnifVar(21) })
+- Code({1:UnifVar(7) 2:UnifVar(8) 3:UnifVar(9) }) = Code({1:UnifVar(22) 2:UnifVar(23) 3:UnifVar(24) })
+- UnifVar(8) = Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+- UnifVar(25) = Int
+- UnifVar(27) = Int
+- UnifVar(10) = Int
+- UnifVar(12) = Int
+- UnifVar(13) = Int
+- UnifVar(15) = Int
+
+--- starting unify ---
+> Constraining UnifVar(4) = UnifVar(16)
+> Constraining UnifVar(5) = UnifVar(17)
+> Constraining UnifVar(6) = UnifVar(18)
+> Constraining UnifVar(7) = UnifVar(19)
+> Constraining UnifVar(8) = UnifVar(20)
+> Constraining UnifVar(9) = UnifVar(21)
+> Constraining UnifVar(7) = UnifVar(22)
+> Constraining UnifVar(8) = UnifVar(23)
+> Constraining UnifVar(9) = UnifVar(24)
+> Substituting UnifVar(8) = Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+> Substituting UnifVar(25) = Int
+> Substituting UnifVar(27) = Int
+> Substituting UnifVar(10) = Int
+> Substituting UnifVar(12) = Int
+> Substituting UnifVar(13) = Int
+> Substituting UnifVar(15) = Int
+> Substituting UnifVar(16) = UnifVar(4)
+> Substituting UnifVar(17) = UnifVar(5)
+> Substituting UnifVar(18) = UnifVar(6)
+> Substituting UnifVar(19) = UnifVar(7)
+> Substituting UnifVar(20) = Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+> Substituting UnifVar(21) = UnifVar(9)
+> Substituting UnifVar(22) = UnifVar(7)
+> Substituting UnifVar(23) = Code({1:UnifVar(25) 2:UnifVar(26) 3:UnifVar(27) })
+> Substituting UnifVar(24) = UnifVar(9)
+--- rhos --- 
+--- Mapping --- 
+- unifVar(1) => Any
+- unifVar(2) => Any
+- unifVar(3) => Any
+- unifVar(4) => Any
+- unifVar(5) => Any
+- unifVar(6) => Any
+- unifVar(7) => Any
+- unifVar(8) => Code({1:Int 2:Any 3:Int })
+- unifVar(9) => Any
+- unifVar(10) => Int
+- unifVar(11) => Any
+- unifVar(12) => Int
+- unifVar(13) => Int
+- unifVar(14) => Any
+- unifVar(15) => Int
+- unifVar(16) => Any
+- unifVar(17) => Any
+- unifVar(18) => Any
+- unifVar(19) => Any
+- unifVar(20) => Code({1:Int 2:Any 3:Int })
+- unifVar(21) => Any
+- unifVar(22) => Any
+- unifVar(23) => Code({1:Int 2:Any 3:Int })
+- unifVar(24) => Any
+- unifVar(25) => Int
+- unifVar(26) => Any
+- unifVar(27) => Int
+--- Rho mappings --- 
+--- Heap ---
+doB => 
+  r1: UnifVar(13)
+  r2: UnifVar(14)
+  r3: UnifVar(15)
+go => 
+  r1: UnifVar(7)
+  r2: UnifVar(8)
+  r3: UnifVar(9)
+case2 => 
+  r1: UnifVar(4)
+  r2: UnifVar(5)
+  r3: UnifVar(6)
+entry => 
+  r1: UnifVar(1)
+  r2: UnifVar(2)
+  r3: UnifVar(3)
+doA => 
+  r1: UnifVar(10)
+  r2: UnifVar(11)
+  r3: UnifVar(12)
+--- Heap w/ mapping ---
+doB => 
+  r1: Int
+  r2: Any
+  r3: Int
+go => 
+  r1: Any
+  r2: Code({1:Int 2:Any 3:Int })
+  r3: Any
+case2 => 
+  r1: Any
+  r2: Any
+  r3: Any
+entry => 
+  r1: Any
+  r2: Any
+  r3: Any
+doA => 
+  r1: Int
+  r2: Any
+  r3: Int
+--- Starting satisfy ---
+ x-- jump start --x
+[x] Int <: Any
+[x] Any <: Any
+[x] Any <: Any
+rhos: []
+ x-- jump done --x
+ x-- jump start --x
+[x] Int <: Any
+[x] Code({1:Int 2:Any 3:Int }) <: Code({1:Int 2:Any 3:Int })
+[x] Any <: Any
+rhos: []
+ x-- jump done --x
+ x-- jump start --x
+[x] Any <: Any
+[x] Code({1:Int 2:Any 3:Int }) <: Code({1:Int 2:Any 3:Int })
+[x] Any <: Any
+rhos: []
+ x-- jump done --x
+ x-- jump start --x
+[x] Int <: Int
+[x] Code({1:Int 2:Any 3:Int }) <: Any
+[x] Int <: Int
+rhos: []
+ x-- jump done --x
+--- Done satisfy ---
+--- Starting not-equal checks ---
+--- Done not-equal checks ---
+Res Ok(())
