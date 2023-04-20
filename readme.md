@@ -160,7 +160,7 @@ Again, this interally uses the sketchy subyping system to allow weak stores to u
 
 $$
 \frac{\Psi, \Gamma\vdash r1 \Leftarrow T_1 \quad \Psi, \Gamma\vdash r2 \Leftarrow T_2\quad \rho \in FTV}
-{\Psi \vdash \text{store\_strong r1 n r2} : (\Gamma, C) \rightarrow (\Gamma, C')} (\text{Store strong})
+{\Psi \vdash \text{store-strong r1 n r2} : (\Gamma, C) \rightarrow (\Gamma, C')} (\text{Store strong})
 $$
 $$
 \text{where } C' = C \cup \{T_1 = Ptr(\{n: T_3\}, \rho), T_2 \neq UniqPtr\}
