@@ -18,6 +18,21 @@ In the TAL paper we saw that typed assembly was able to provide a number of usef
 
 This project attempts to do exactly that, inferring all types for TAL with jumps and pointers. The goals are to prevent the same classes of issues that the original TAL and the ATAPL TAL attempted to avoid, namely getting stuck and accessing unbound memory.
 
+# Syntax
+
+The instructions are
+
+- `add r1 r2 v`, `sub r1 r2 v`
+- `mov r1 r2`
+- `bnz r2 v`
+- `load r1 r2 i`
+- `store r1 i r2`
+- `store-strong r1 i r2`
+- `malloc r1 n`
+- `commit r1`
+
+which follow the same runtime semantics as what we saw in ATAPL. 
+
 # Typing rules
 
 ## Basic types
@@ -125,7 +140,7 @@ $$
 {\Psi \vdash \text{mov r1 r2} : (\Gamma, C) \rightarrow (\Gamma[r1/T], C \cup \{T \neq UniqPtr\})} (\text{Mov})
 $$
 
-Let $A$ be one of the arithmetic operations, $A\in \{\text{add}, \text{mul}\}$.
+Let $A$ be one of the arithmetic operations, $A\in \{\text{add}, \text{sub}\}$.
 
 $$
 \frac{\Psi, \Gamma\vdash r2 \Leftarrow T_2 \quad \Psi, \Gamma\vdash v \Leftarrow T_3}
@@ -164,6 +179,13 @@ $$
 $$
 $$
 \text{where } C' = C \cup \{T_1 = Ptr(\{n: T_3\}, \rho), T_2 \neq UniqPtr\}
+$$
+
+Finally, we have `commit`
+
+$$
+\frac{\Psi, \Gamma\vdash r \Leftarrow T_1 \quad \rho \in FTV}
+{\Psi \vdash \text{commit r} : (\Gamma, C) \rightarrow (\Gamma[r/Ptr(\emptyset, \rho)], C \cup \{T_1 = UniqPtr(\emptyset, \rho)\})} (\text{Commit})
 $$
 
 # Implementation details
